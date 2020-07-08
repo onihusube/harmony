@@ -18,6 +18,7 @@ namespace harmony::detail {
   };
 
   struct unwrap_impl {
+
     template<weakly_indirectly_readable T>
     constexpr auto& operator()(T& t) noexcept(noexcept(*t)) {
       return *t;
@@ -25,56 +26,77 @@ namespace harmony::detail {
 
     template<typename T>
       requires (not weakly_indirectly_readable<T>) and
-               requires(const T& t) {
-                 {t.value()} -> not_void;
-               }
+               requires(const T& t) { {t.value()} -> not_void; }
     constexpr auto& operator()(T& t) noexcept(noexcept(*t)) {
       return *t;
     }
-
-    template<typename T>
-    auto operator()(T&& t);
   };
+
+} // harmony::detail
+
+namespace harmony::inline cpo {
+  
+  inline constexpr detail::unwrap_impl unwrap{};
+  
+}
+
+namespace harmony::inline concepts {
+
+  template<typename T>
+  concept unwrappable = requires(T& m) {
+    { harmony::cpo::unwrap(m) } -> detail::not_void;
+  };
+}
+
+namespace harmony::detail {
 
   template<typename T>
   concept boolean_convertible = requires(const T& t) {
     bool(t);
   };
 
-  struct is_empty_impl {
+  struct validate_impl {
 
-    template<boolean_convertible T>
+    template<unwrappable T>
+      requires boolean_convertible<T>
     constexpr bool operator()(const T& t) noexcept(noexcept(bool(t))) {
-      return not bool(t);
+      return bool(t);
     }
 
-    template<typename T>
+    template<unwrappable T>
       requires (not boolean_convertible<T>) and
-               requires(const T& t) {
-                 {t.has_value()} -> std::same_as<bool>;
-               }
+               requires(const T& t) { {t.has_value()} -> std::same_as<bool>; }
     constexpr bool operator()(const T& t) noexcept(noexcept(t.has_value())) {
-      return not t.has_value();
+      return t.has_value();
     }
 
-    template<typename T>
+    template<unwrappable T>
       requires requires(const T& t) {
         {std::ranges::empty(t)} -> std::same_as<bool>;
       }
     constexpr bool operator()(const T& t) noexcept(noexcept(std::ranges::empty(t))) {
-      return std::ranges::empty(t);
+      return not std::ranges::empty(t);
     }
   };
   
-} // detail
+} // harmony::detail
 
 namespace harmony::inline cpo {
+
+  inline constexpr detail::validate_impl validate{};
   
-  inline constexpr detail::unwrap_impl unwrap{};
+}
+
+namespace harmony::inline concepts {
+
+  template<typename T>
+  concept maybe = requires(T& m) {
+    { harmony::cpo::validate(m) } -> std::same_as<bool>;
+  };
   
-  inline constexpr detail::is_empty_impl empty{};
-  
-} // harmony::cpo
+  template<typename T>
+  concept list = maybe<T> and std::ranges::range<T>;
+}
 
 namespace harmony::traits {
   
@@ -84,22 +106,35 @@ namespace harmony::traits {
 
 namespace harmony {
 
-  template<typename T>
-  concept monad = requires(T& m) {
-    { harmony::cpo::unwrap(m) } -> detail::not_void;
-    { harmony::cpo::empty(m) } -> std::same_as<bool>;
-  };
-
-  template<typename T>
-  class harmonic {
+  template<unwrappable T>
+  class monas {
     
-    T m_value;
+    T m_monad;
     
   public:
-    template<typename U = T>
-    harmonic(U&& v) : m_value(std::forward<U>(v)) {}
+
+    template<std::same_as<T> U>
+    constexpr monas(U&& v) : m_monad(std::forward<U>(v)) {}
     
+    template<std::invocable<traits::content_t<T>> F>
+      requires (not maybe<T>)
+    friend constexpr auto operator|(monas& self, F&& f) -> T {
+      return f(cpo::unwrap(self.m_monad));
+    }
+    
+    template<std::invocable<traits::content_t<T>> F>
+      requires maybe<T>
+    friend constexpr auto operator|(monas& self, F&& f) -> T {
+      if (cpo::validate(self.m_monad)) {
+        return f(cpo::unwrap(self));
+      } else {
+        return self.m_monad;
+      }
+    }
     
   };
+  
+  template<typename T>
+  monas(T&&) -> monas<std::remove_cvref_t<T>>;
   
 } // harmony
