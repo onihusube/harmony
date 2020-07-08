@@ -1,0 +1,17 @@
+{
+    "configurations": [
+        {
+            "name": "Mac g++",
+            "includePath": [
+                "${workspaceFolder}/include"
+            ],
+            "defines": [],
+            "macFrameworkPath": [],
+            "compilerPath": "/usr/local/bin/g++-10",
+            "cStandard": "c11",
+            "cppStandard": "c++20",
+            "intelliSenseMode": "gcc-x64"
+        }
+    ],
+    "version": 4
+}
