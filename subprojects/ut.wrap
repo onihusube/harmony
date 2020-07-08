@@ -1,0 +1,4 @@
+[wrap-git]
+directory=ut
+url=https://github.com/onihusube/ut.git
+revision=HEAD

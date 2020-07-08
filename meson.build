@@ -15,7 +15,11 @@ vs_files = ['include/harmony.hpp', 'test/harmony_test.cpp']
 #インクルードディレクトリ
 include_dir = include_directories('include')
 
-exe = executable('harmony_test', 'test/harmony_test.cpp', include_directories : include_dir, extra_files : vs_files, cpp_args : options)
+#依存プロジェクト
+boostut_proj = subproject('ut')
+boostut_dep = boostut_proj.get_variable('boostut_dep')
+
+exe = executable('harmony_test', 'test/harmony_test.cpp', include_directories : include_dir, extra_files : vs_files, cpp_args : options, dependencies : boostut_dep)
 
 #テストの設定
 test('harmony test', exe)

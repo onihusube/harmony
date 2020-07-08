@@ -1,0 +1,3 @@
+[submodule "subprojects/ut"]
+	path = subprojects/ut
+	url = https://github.com/onihusube/ut.git
