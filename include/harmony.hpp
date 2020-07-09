@@ -198,53 +198,65 @@ namespace harmony {
   template<unwrappable T>
   class monas {
 
-    static_assert(not (std::is_lvalue_reference_v<T> or std::is_rvalue_reference_v<T>), "T must not be a reference type.");
+    static_assert(not std::is_rvalue_reference_v<T>, "T must not be a rvalue reference type.");
+    
+    // lvalueから初期化された際、Tは左辺値参照となる
+    static constexpr bool has_reference = std::is_lvalue_reference_v<T>;
 
-    T& m_monad;
+    // lvalueから初期化された際、Tから参照を外した型
+    using bound_t = std::remove_reference_t<T>;
+
+    T m_monad;
     
   public:
 
-    constexpr monas(T& monad) noexcept : m_monad(monad) {}
+    constexpr monas(T& bound) noexcept requires has_reference
+      : m_monad(bound) {}
+    
+    template<equivalent_to<T> U>
+      requires (not has_reference)
+    constexpr monas(U&& bound) noexcept(noexcept(T(std::forward<U>(bound))))
+      : m_monad(std::forward<U>(bound)) {}
 
     [[nodiscard]]
-    constexpr auto operator*() noexcept(noexcept(cpo::unwrap(m_monad))) -> traits::unwrap_raw_t<T> {
+    constexpr auto& operator*() noexcept(noexcept(cpo::unwrap(m_monad))) {
       return cpo::unwrap(m_monad);
     }
 
     // [[nodiscard]]
-    // constexpr auto operator*() && noexcept(noexcept(std::move(cpo::unwrap(m_monad)))) -> traits::unwrap_t<T> {
-    //   return std::move(cpo::unwrap(m_monad));
+    // constexpr auto&& operator*() && noexcept(noexcept(cpo::unwrap(std::move(m_monad)))) requires (not has_reference) {
+    //   return cpo::unwrap(std::move(m_monad));
     // }
 
     [[nodiscard]]
-    constexpr explicit operator bool() const noexcept(noexcept(cpo::validate(m_monad))) requires maybe<T> {
+    constexpr explicit operator bool() const noexcept(noexcept(cpo::validate(m_monad))) requires maybe<bound_t> {
       return cpo::validate(m_monad);
     }
 
-    // constexpr operator T() const & noexcept(std::is_nothrow_copy_constructible_v<T>) {
-    //   return m_monad;
-    // }
-
-    constexpr operator T&() {
+    constexpr operator T() noexcept requires has_reference {
+      return m_monad;
+    }
+    
+    constexpr operator T&() & noexcept requires (not has_reference) {
       return m_monad;
     }
 
-    // constexpr operator T() && noexcept(std::is_nothrow_move_constructible_v<T>) {
-    //   return std::move(m_monad);
-    // }
+    constexpr operator T&&() && noexcept requires (not has_reference) {
+      return std::move(m_monad);
+    }
 
   public:
 
-    template<monadic<T> F>
-      requires (not maybe<T>)
-    friend constexpr auto operator|(monas&& self, F&& f) noexcept(std::is_nothrow_invocable_r_v<T, F, traits::unwrap_t<T>>) -> monas<T>&& {
+    template<monadic<bound_t> F>
+      requires (not maybe<bound_t>)
+    friend constexpr auto operator|(monas&& self, F&& f) noexcept(std::is_nothrow_invocable_r_v<bound_t, F, traits::unwrap_t<bound_t>>) -> monas<T>&& {
       cpo::unit(self.m_monad, f(*self));
       return std::move(self);
     }
     
-    template<monadic<T> F>
-      requires maybe<T>
-    friend constexpr auto operator|(monas&& self, F&& f) noexcept(std::is_nothrow_invocable_r_v<T, F, traits::unwrap_t<T>>) -> monas<T>&& {
+    template<monadic<bound_t> F>
+      requires maybe<bound_t>
+    friend constexpr auto operator|(monas&& self, F&& f) noexcept(std::is_nothrow_invocable_r_v<bound_t, F, traits::unwrap_t<bound_t>>) -> monas<T>&& {
       if (self) {
         cpo::unit(self.m_monad, f(*self));
       }
@@ -253,6 +265,6 @@ namespace harmony {
   };
   
   template<typename T>
-  monas(T&) -> monas<std::remove_cvref_t<T>>;
+  monas(T&&) -> monas<std::remove_cv_t<T>>;
   
 } // harmony
