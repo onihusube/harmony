@@ -14,7 +14,7 @@ namespace harmony::inline concepts {
   };
 
   template<typename T>
-  concept weakly_indirectly_readable = requires(const T& t) {
+  concept weakly_indirectly_readable = requires(T& t) {
     {*t} -> not_void;
   };
 }
@@ -203,37 +203,31 @@ namespace harmony {
     // lvalueから初期化された際、Tは左辺値参照となる
     static constexpr bool has_reference = std::is_lvalue_reference_v<T>;
 
-    // lvalueから初期化された際、Tから参照を外した型
-    using bound_t = std::remove_reference_t<T>;
+    // Tから参照を外した型、lvalueから初期化された時だけTと異なる
+    using M = std::remove_reference_t<T>;
 
+    // lvalueから初期化された場合はその参照を、xvalueから初期化された場合はmoveしてオブジェクトを保持
     T m_monad;
     
   public:
 
     constexpr monas(T& bound) noexcept requires has_reference
       : m_monad(bound) {}
-    
-    template<equivalent_to<T> U>
-      requires (not has_reference)
-    constexpr monas(U&& bound) noexcept(noexcept(T(std::forward<U>(bound))))
-      : m_monad(std::forward<U>(bound)) {}
+
+    constexpr monas(T&& bound) noexcept(std::is_nothrow_move_constructible_v<T>) requires (not has_reference)
+      : m_monad(std::move(bound)) {}
 
     [[nodiscard]]
     constexpr auto& operator*() noexcept(noexcept(cpo::unwrap(m_monad))) {
       return cpo::unwrap(m_monad);
     }
 
-    // [[nodiscard]]
-    // constexpr auto&& operator*() && noexcept(noexcept(cpo::unwrap(std::move(m_monad)))) requires (not has_reference) {
-    //   return cpo::unwrap(std::move(m_monad));
-    // }
-
     [[nodiscard]]
-    constexpr explicit operator bool() const noexcept(noexcept(cpo::validate(m_monad))) requires maybe<bound_t> {
+    constexpr explicit operator bool() const noexcept(noexcept(cpo::validate(m_monad))) requires maybe<M> {
       return cpo::validate(m_monad);
     }
 
-    constexpr operator T() noexcept requires has_reference {
+    constexpr operator T&() noexcept requires has_reference {
       return m_monad;
     }
     
@@ -247,19 +241,24 @@ namespace harmony {
 
   public:
 
-    template<monadic<bound_t> F>
-      requires (not maybe<bound_t>)
-    friend constexpr auto operator|(monas&& self, F&& f) noexcept(std::is_nothrow_invocable_r_v<bound_t, F, traits::unwrap_t<bound_t>>) -> monas<T>&& {
+    template<monadic<M> F>
+      requires (not maybe<M>)
+    friend constexpr auto operator|(monas&& self, F&& f) noexcept(std::is_nothrow_invocable_r_v<M, F, traits::unwrap_t<M>>) -> monas<T>&& {
       cpo::unit(self.m_monad, f(*self));
       return std::move(self);
     }
     
-    template<monadic<bound_t> F>
-      requires maybe<bound_t>
-    friend constexpr auto operator|(monas&& self, F&& f) noexcept(std::is_nothrow_invocable_r_v<bound_t, F, traits::unwrap_t<bound_t>>) -> monas<T>&& {
+    template<monadic<M> F>
+      requires maybe<M>
+    friend constexpr auto operator|(monas&& self, F&& f) noexcept(std::is_nothrow_invocable_r_v<M, F, traits::unwrap_t<M>>) -> monas<T>&& {
       if (self) {
         cpo::unit(self.m_monad, f(*self));
       }
+      return std::move(self);
+    }
+
+    [[nodiscard]]
+    friend constexpr auto operator~(monas& self) noexcept -> monas<T>&& {
       return std::move(self);
     }
   };
