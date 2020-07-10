@@ -1,6 +1,7 @@
 #include <concepts>
 #include <utility>
 #include <ranges>
+#include <optional>
 
 
 namespace harmony::inline concepts {
@@ -203,13 +204,13 @@ namespace harmony {
     // lvalueから初期化された際、Tは左辺値参照となる
     static constexpr bool has_reference = std::is_lvalue_reference_v<T>;
 
-    // Tから参照を外した型、lvalueから初期化された時だけTと異なる
-    using M = std::remove_reference_t<T>;
-
     // lvalueから初期化された場合はその参照を、xvalueから初期化された場合はmoveしてオブジェクトを保持
     T m_monad;
     
   public:
+
+    // Tから参照を外した型、lvalueから初期化された時だけTと異なる
+    using M = std::remove_reference_t<T>;
 
     constexpr monas(T& bound) noexcept requires has_reference
       : m_monad(bound) {}
@@ -267,3 +268,85 @@ namespace harmony {
   monas(T&&) -> monas<std::remove_cv_t<T>>;
   
 } // harmony
+
+namespace harmony::inline concepts {
+
+  namespace impl {
+
+    template<typename T, template<typename> typename S>
+    inline constexpr bool is_specialization_of = false;
+
+    template<typename T, template<typename> typename S>
+    inline constexpr bool is_specialization_of<S<T>, S> = true;
+  }
+
+  template<typename T, template<typename> typename S>
+  concept specialization_of = impl::is_specialization_of<T, S>;
+}
+
+namespace harmony::detail {
+  
+  template<unwrappable M>
+  [[nodiscard]]
+  inline constexpr auto suitable_wrap(M&& m) -> monas<M> {
+    return monas(std::forward<M>(m));
+  }
+
+  template<typename T>
+  [[nodiscard]]
+  inline constexpr auto suitable_wrap(monas<T>&& m) -> monas<T> {
+    return std::move(m);
+  }
+
+  template<typename F>
+  struct map_impl {
+
+    F fmap;
+
+    template<bool monadic_return, typename M>
+    auto invoke_impl(M&& m) {
+      if constexpr (monadic_return) {
+        // map結果がモナド的な型の値ならば、単にmonasで包んで返す
+        return suitable_wrap(this->fmap(cpo::unwrap(m)));
+      } else {
+        // map結果はモナド的な型ではない時、optionalで包んでmonasで包んで返す
+        return monas(std::make_optional(this->fmap(cpo::unwrap(m))));
+      }
+    }
+
+    template<unwrappable M>
+      requires std::invocable<F, traits::unwrap_t<M>>
+    [[nodiscard]]
+    friend constexpr specialization_of<monas> auto operator|(M&& m, map_impl&& self) {
+      return self.invoke_impl<unwrappable<std::invoke_result_t<F, traits::unwrap_t<M>>>>(std::forward<M>(m));
+    }
+
+    template<maybe M>
+      requires std::invocable<F, traits::unwrap_t<M>>
+    [[nodiscard]]
+    friend constexpr specialization_of<monas> auto operator|(M&& m, map_impl&& self) {
+      using ret_t = decltype(self.invoke_impl<unwrappable<std::invoke_result_t<F, traits::unwrap_t<M>>>>(std::forward<M>(m)));
+
+      if (cpo::validate(m)) {
+        return self.invoke_impl<unwrappable<std::invoke_result_t<F, traits::unwrap_t<M>>>>(std::forward<M>(m));
+      }
+
+      // 無効状態で初期化したい、CPOが必要かも・・・
+      return ret_t{typename ret_t::M{}};
+    }
+  };
+
+  template<typename F>
+  map_impl(F&&) -> map_impl<F>;
+
+} // namespace harmony::detail
+
+namespace harmony::inline monadic_op {
+
+  inline constexpr auto map = []<typename F>(F&& f) {
+    return detail::map_impl{ .fmap = std::forward<F>(f) };
+  };
+
+  inline constexpr auto& transform = map;
+
+} // namespace harmony::inline monadic_op
