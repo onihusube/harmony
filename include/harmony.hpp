@@ -269,6 +269,27 @@ namespace harmony {
   
 } // harmony
 
+namespace harmony {
+
+  template<typename T>
+  struct sachet {
+    T value;
+
+    [[nodiscard]]
+    constexpr auto operator*() & noexcept -> T& {
+      return value;
+    }
+
+    [[nodiscard]]
+    constexpr auto operator*() && noexcept -> T&& {
+      return std::move(value);
+    }
+  };
+  
+  template<typename T>
+  sachet(T&&) -> sachet<std::remove_cvref_t<T>>;
+}
+
 namespace harmony::inline concepts {
 
   namespace impl {
@@ -307,21 +328,21 @@ namespace harmony::detail {
     auto invoke_impl(M&& m) {
       if constexpr (monadic_return) {
         // map結果がモナド的な型の値ならば、単にmonasで包んで返す
-        return suitable_wrap(this->fmap(cpo::unwrap(m)));
+        return monas(this->fmap(cpo::unwrap(m)));
       } else {
-        // map結果はモナド的な型ではない時、optionalで包んでmonasで包んで返す
-        return monas(std::make_optional(this->fmap(cpo::unwrap(m))));
+        // map結果はモナド的な型ではない時、sachetで包んでmonasで包んで返す
+        return monas(sachet{ .value = this->fmap(cpo::unwrap(m)) });
       }
     }
 
     template<unwrappable M>
       requires std::invocable<F, traits::unwrap_t<M>>
     [[nodiscard]]
-    friend constexpr specialization_of<monas> auto operator|(M&& m, map_impl&& self) {
+    friend constexpr specialization_of<monas> auto operator|(M&& m, map_impl self) {
       return self.invoke_impl<unwrappable<std::invoke_result_t<F, traits::unwrap_t<M>>>>(std::forward<M>(m));
     }
-
-    template<maybe M>
+    
+    /*template<maybe M>
       requires std::invocable<F, traits::unwrap_t<M>>
     [[nodiscard]]
     friend constexpr specialization_of<monas> auto operator|(M&& m, map_impl&& self) {
@@ -333,7 +354,7 @@ namespace harmony::detail {
 
       // 無効状態で初期化したい、CPOが必要かも・・・
       return ret_t{typename ret_t::M{}};
-    }
+    }*/
   };
 
   template<typename F>
@@ -343,7 +364,7 @@ namespace harmony::detail {
 
 namespace harmony::inline monadic_op {
 
-  inline constexpr auto map = []<typename F>(F&& f) {
+  inline constexpr auto map = []<typename F>(F&& f) -> detail::map_impl<F> {
     return detail::map_impl{ .fmap = std::forward<F>(f) };
   };
 
