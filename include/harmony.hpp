@@ -15,8 +15,8 @@ namespace harmony::inline concepts {
   };
 
   template<typename T>
-  concept weakly_indirectly_readable = requires(T& t) {
-    {*t} -> not_void;
+  concept weakly_indirectly_readable = requires(T&& t) {
+    {*std::forward<T>(t)} -> not_void;
   };
 }
 
@@ -24,49 +24,24 @@ namespace harmony::detail {
   
   struct unwrap_impl {
 
-    template<typename T>
-      requires std::is_pointer_v<T>
-    [[nodiscard]]
-    constexpr auto& operator()(T t) const noexcept {
-      return *t;
-    }
-
     template<weakly_indirectly_readable T>
-      requires (not std::is_pointer_v<T>)
     [[nodiscard]]
-    constexpr auto& operator()(T& t) const noexcept(noexcept(*t)) {
-      return *t;
+    constexpr auto&& operator()(T&& t) const noexcept(noexcept(*std::forward<T>(t))) {
+      return *std::forward<T>(t);
     }
 
     template<typename T>
       requires (not weakly_indirectly_readable<T>) and
-               requires(T& t) { {t.value()} -> not_void; }
+               requires(T&& t) { {std::forward<T>(t).value()} -> not_void; }
     [[nodiscard]]
-    constexpr auto& operator()(T& t) const noexcept(noexcept(t.value())) {
-      return t.value();
+    constexpr auto&& operator()(T&& t) const noexcept(noexcept(std::forward<T>(t).value())) {
+      return std::forward<T>(t).value();
     }
 
     template<std::ranges::range R>
     [[nodiscard]]
-    constexpr auto operator()(R& t) const noexcept(noexcept(std::ranges::begin(t)) and noexcept(std::ranges::end(t))) {
-      struct wrap_view {
-        using iterator = std::ranges::iterator_t<R>;
-
-        iterator it;
-
-        [[no_unique_address]]
-        std::ranges::sentinel_t<R> se;
-
-        constexpr auto begin() const noexcept {
-          return it;
-        }
-
-        constexpr auto end() const noexcept {
-          return se;
-        }
-      };
-
-      return wrap_view{ .it = std::ranges::begin(t), .se = std::ranges::end(t)};
+    constexpr auto operator()(R&& r) const noexcept -> R&& {
+      return std::forward<R>(r);
     }
   };
 
@@ -266,10 +241,7 @@ namespace harmony {
   
   template<typename T>
   monas(T&&) -> monas<std::remove_cv_t<T>>;
-  
-} // harmony
 
-namespace harmony {
 
   template<typename T>
   struct sachet {
