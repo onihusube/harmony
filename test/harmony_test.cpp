@@ -1,8 +1,46 @@
 #include <optional>
 #include <vector>
+#include <cmath>
+#include <string>
 
 #include "boost/ut.hpp"
 #include "harmony.hpp"
+
+template<typename T, typename E>
+struct simple_result {
+  T ok;
+  E err;
+  bool is_ok_v = true;
+
+  template<typename U = T>
+    requires std::constructible_from<T, U&&>
+  simple_result(U&& v)
+    : ok(std::forward<U>(v))
+    , err{}
+    , is_ok_v{true}
+  {}
+
+  template<typename U = E>
+    requires std::constructible_from<E, U&&>
+  simple_result(E&& v)
+    : ok{}
+    , err(std::forward<U>(v))
+    , is_ok_v{true}
+  {}
+
+  auto unwrap() -> T& {
+    return ok;
+  }
+
+  auto unwrap_err() -> E& {
+    return err;
+  }
+
+  bool is_ok() const noexcept {
+    return is_ok_v;
+  }
+};
+
 
 namespace ut = boost::ut;
 
@@ -14,12 +52,14 @@ int main() {
     ut::expect(harmony::unwrappable<int*>);
     ut::expect(harmony::unwrappable<std::optional<int>>);
     ut::expect(harmony::unwrappable<std::vector<int>>);
+    ut::expect(harmony::unwrappable<simple_result<int, std::string>>);
   };
 
   "concept maybe test"_test = [] {
     ut::expect(harmony::maybe<int *>);
     ut::expect(harmony::maybe<std::optional<int>>);
     ut::expect(harmony::maybe<std::vector<int>>);
+    ut::expect(harmony::maybe<simple_result<int, std::string>>);
   };
 
   "concept list test"_test = [] {
@@ -37,6 +77,14 @@ int main() {
     ut::expect(harmony::rewrappable<std::optional<int>, double>);
     ut::expect(harmony::rewrappable<std::optional<int>, std::optional<int>>);
     ut::expect(harmony::rewrappable<int*, int*>);
+    ut::expect(harmony::rewrappable<simple_result<int, std::string>, int>);
+    ut::expect(not harmony::rewrappable<simple_result<int, std::string>, std::string>);
+  };
+
+  "concept either test"_test = [] {
+    ut::expect(harmony::either<int*>);
+    ut::expect(harmony::either<std::optional<int>>);
+    ut::expect(harmony::either<simple_result<int, std::string>>);
   };
 
   "cpo unwrap test"_test = [] {
@@ -120,6 +168,30 @@ int main() {
 
       !ut::expect(harmony::validate(opt));
       20_i == harmony::unwrap(opt);
+    }
+  };
+
+  "cpo unwrap_other test"_test = [] {
+    {
+      int* p = nullptr;
+
+      int* n = harmony::unwrap_other(p);
+
+      ut::expect(n == nullptr);
+    }
+    {
+      std::optional<int> opt{};
+
+      std::optional<int> n = harmony::unwrap_other(opt);
+
+      ut::expect(n == std::nullopt);
+    }
+    {
+      simple_result<int, std::string> res{std::string("test either")};
+
+      auto &str = harmony::unwrap_other(res);
+
+      ut::expect(str == "test either");
     }
   };
 
@@ -209,13 +281,13 @@ int main() {
     auto opt = harmony::monas(&n) 
       | [](int n) { return n + n; }
       | [](int n) { return n + 100; }
-      | map([](int n) { return double(n) + 0.1;})
+      | map([](int n) { return float(n) + 0.1f;})
+      | map([](float f) { return double(f);})
       | [](double d) { return d + d;}
       | transform([](double d) { return std::optional<double>{d + 0.01};})
-      | [](double d) { return d; };
+      | [](double d) { return std::ceil(d * 100.0); };
 
     !ut::expect(harmony::validate(opt));
-
-    240.21_d == harmony::unwrap(opt);
+    24021.0_d == harmony::unwrap(opt);
   };
 }
