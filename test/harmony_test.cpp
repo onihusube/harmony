@@ -200,4 +200,22 @@ int main() {
       0_i == n;
     }
   };
+
+  "map test"_test = [] {
+    using namespace harmony::monadic_op;
+
+    int n = 10;
+
+    auto opt = harmony::monas(&n) 
+      | [](int n) { return n + n; }
+      | [](int n) { return n + 100; }
+      | map([](int n) { return double(n) + 0.1;})
+      | [](double d) { return d + d;}
+      | transform([](double d) { return std::optional<double>{d + 0.01};})
+      | [](double d) { return d; };
+
+    !ut::expect(harmony::validate(opt));
+
+    240.21_d == harmony::unwrap(opt);
+  };
 }
