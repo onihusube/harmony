@@ -405,24 +405,38 @@ namespace harmony::inline concepts {
     };
 } // namespace harmony::inline concepts
 
+namespace harmony::traits {
+
+  template<typename T>
+  using unwrap_other_raw_t = decltype(harmony::cpo::unwrap_other(std::declval<T>()));
+  
+  template<typename T>
+  using unwrap_other_t = std::remove_cvref_t<unwrap_other_raw_t<T>>;
+}
+
 namespace harmony::detail {
 
   template<typename F>
   struct and_then_impl {
 
     [[no_unique_address]] F fmap;
-
-    /*template<maybe M>
-      requires not_void_resulted<F, traits::unwrap_t<M>> and
-               unwrappable<std::invoke_result_t<F, traits::unwrap_t<M>>>
+    
+    template<either M>
+      requires std::invocable<F, traits::unwrap_t<M>> and
+               either<std::invoke_result_t<F, traits::unwrap_t<M>>> and
+               std::constructible_from<std::remove_reference_t<std::invoke_result_t<F, traits::unwrap_t<M>>>, traits::unwrap_other_raw_t<M>>
     [[nodiscard]]
     friend constexpr specialization_of<monas> auto operator|(M&& m, and_then_impl self) {
+      // 呼び出し結果が左辺値参照を返すとき、コピーされることになる
+      // mが有効値を保持していないとき、戻り値のmonasはmの無効値をムーブするしかない（参照するのは危険）
+      using ret_either_t = std::remove_reference_t<decltype(self.fmap(cpo::unwrap(std::forward<M>(m))))>;
+
       if (cpo::validate(m)) {
-        return self.invoke_impl<unwrappable<std::invoke_result_t<F, traits::unwrap_t<M>>>>(std::forward<M>(m));
+        return monas<ret_either_t>(self.fmap(cpo::unwrap(std::forward<M>(m))));
       } else {
-        return std::move(m);
+        return monas<ret_either_t>(cpo::unwrap_other(std::forward<M>(m)));
       }
-    }*/
+    }
   };
   
   template<typename F>
