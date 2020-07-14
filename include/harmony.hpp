@@ -27,7 +27,7 @@ namespace harmony::detail {
 
     template<weakly_indirectly_readable T>
     [[nodiscard]]
-    constexpr auto&& operator()(T&& t) const noexcept(noexcept(*std::forward<T>(t))) {
+    constexpr decltype(auto) operator()(T&& t) const noexcept(noexcept(*std::forward<T>(t))) {
       return *std::forward<T>(t);
     }
 
@@ -35,7 +35,7 @@ namespace harmony::detail {
       requires (not weakly_indirectly_readable<T>) and
                requires(T&& t) { {std::forward<T>(t).value()} -> not_void; }
     [[nodiscard]]
-    constexpr auto&& operator()(T&& t) const noexcept(noexcept(std::forward<T>(t).value())) {
+    constexpr decltype(auto) operator()(T&& t) const noexcept(noexcept(std::forward<T>(t).value())) {
       return std::forward<T>(t).value();
     }
 
@@ -44,7 +44,7 @@ namespace harmony::detail {
                (not requires(T&& t) { {std::forward<T>(t).value()} -> not_void; }) and
                requires(T&& t) { {std::forward<T>(t).unwrap()} -> not_void; }
     [[nodiscard]]
-    constexpr auto&& operator()(T&& t) const noexcept(noexcept(std::forward<T>(t).unwrap())) {
+    constexpr decltype(auto) operator()(T&& t) const noexcept(noexcept(std::forward<T>(t).unwrap())) {
       return std::forward<T>(t).unwrap();
     }
 
@@ -138,10 +138,7 @@ namespace harmony::inline concepts {
 namespace harmony::traits {
 
   template<typename T>
-  using unwrap_raw_t = decltype(harmony::cpo::unwrap(std::declval<T&>()));
-  
-  template<typename T>
-  using unwrap_t = std::remove_cvref_t<unwrap_raw_t<T>>;
+  using unwrap_t = decltype(harmony::cpo::unwrap(std::declval<T>()));
 }
 
 namespace harmony::detail {
@@ -149,14 +146,14 @@ namespace harmony::detail {
   struct unit_impl {
 
     template<unwrappable M, typename T>
-      requires std::is_lvalue_reference_v<traits::unwrap_raw_t<M>> and
-               std::assignable_from<traits::unwrap_raw_t<M>, T>
+      requires std::is_lvalue_reference_v<traits::unwrap_t<M&>> and
+               std::assignable_from<traits::unwrap_t<M&>, T>
     constexpr void operator()(M& m, T&& t) const noexcept(noexcept(cpo::unwrap(m) = std::forward<T>(t))) {
       cpo::unwrap(m) = std::forward<T>(t);
     }
 
     template<unwrappable M, typename T>
-      requires (not (std::is_lvalue_reference_v<traits::unwrap_raw_t<M>> and std::assignable_from<traits::unwrap_raw_t<M>, T>)) and
+      requires (not (std::is_lvalue_reference_v<traits::unwrap_t<M&>> and std::assignable_from<traits::unwrap_t<M&>, T>)) and
                std::assignable_from<M&, T>
     constexpr void operator()(M& m, T&& t) const noexcept(noexcept(m = std::forward<T>(t))) {
       m = std::forward<T>(t);
@@ -186,6 +183,73 @@ namespace harmony::inline concepts {
 
 }
 
+namespace harmony::detail {
+
+  template<typename T>
+  concept nullable = requires(T& t) {
+    t = nullptr;
+  };
+
+  template<typename T>
+  concept has_error_func = requires(T&& t) {
+    {std::forward<T>(t).error()} -> not_void;
+  };
+
+  template<typename T>
+  concept has_unwrap_err_func = requires(T&& t) {
+    {std::forward<T>(t).unwrap_err()} -> not_void;
+  };
+
+
+  struct unwrap_other_impl {
+
+    template<typename T>
+    constexpr auto operator()(const std::optional<T>&) const noexcept -> std::nullopt_t {
+      return std::nullopt;
+    }
+
+    template<maybe T>
+      requires nullable<T>
+    constexpr auto operator()(const T&) const noexcept -> std::nullptr_t {
+      return nullptr;
+    }
+
+    template<maybe T>
+      requires has_error_func<T>
+    constexpr decltype(auto) operator()(T&& t) const noexcept(noexcept(std::forward<T>(t).error())) {
+      return std::forward<T>(t).error();
+    }
+
+    template<maybe T>
+      requires (not has_error_func<T>) and
+               has_unwrap_err_func<T>
+    constexpr decltype(auto) operator()(T&& t) const noexcept(noexcept(std::forward<T>(t).unwrap_err())) {
+      return std::forward<T>(t).unwrap_err();
+    }
+  };
+
+} // namespace harmony::detail
+
+namespace harmony::inline cpo {
+  inline constexpr detail::unwrap_other_impl unwrap_other{};
+}
+
+namespace harmony::inline concepts {
+
+  template<typename T>
+  concept either = 
+    maybe<T> and
+    requires(T&& t) {
+      {cpo::unwrap_other(std::forward<T>(t))} -> not_void;
+    };
+} // namespace harmony::inline concepts
+
+namespace harmony::traits {
+
+  template<typename T>
+  using unwrap_other_t = decltype(harmony::cpo::unwrap_other(std::declval<T>()));
+}
+
 namespace harmony {
 
   template<unwrappable T>
@@ -207,8 +271,10 @@ namespace harmony {
     constexpr monas(T& bound) noexcept requires has_reference
       : m_monad(bound) {}
 
-    constexpr monas(T&& bound) noexcept(std::is_nothrow_move_constructible_v<T>) requires (not has_reference)
-      : m_monad(std::move(bound)) {}
+    template<typename U>
+      requires std::constructible_from<T, U>
+    constexpr monas(U&& bound) noexcept(std::is_nothrow_constructible_v<T, U>) requires (not has_reference)
+      : m_monad(std::forward<U>(bound)) {}
 
     [[nodiscard]]
     constexpr auto& operator*() noexcept(noexcept(cpo::unwrap(m_monad))) {
@@ -218,6 +284,11 @@ namespace harmony {
     [[nodiscard]]
     constexpr explicit operator bool() const noexcept(noexcept(cpo::validate(m_monad))) requires maybe<M> {
       return cpo::validate(m_monad);
+    }
+
+    [[nodiscard]]
+    constexpr decltype(auto) unwrap_err() noexcept(noexcept(cpo::unwrap_other(m_monad))) requires either<M> {
+      return cpo::unwrap_other(m_monad);
     }
 
     constexpr operator T&() noexcept requires has_reference {
@@ -235,15 +306,14 @@ namespace harmony {
   public:
 
     template<monadic<M> F>
-      requires (not maybe<M>)
-    friend constexpr auto operator|(monas&& self, F&& f) noexcept(std::is_nothrow_invocable_r_v<M, F, traits::unwrap_t<M>>) -> monas<T>&& {
+    friend constexpr auto operator|(monas&& self, F&& f) noexcept(std::is_nothrow_invocable_r_v<M, F, traits::unwrap_t<T>>) -> monas<T>&& {
       cpo::unit(self.m_monad, f(*self));
       return std::move(self);
     }
     
     template<monadic<M> F>
       requires maybe<M>
-    friend constexpr auto operator|(monas&& self, F&& f) noexcept(std::is_nothrow_invocable_r_v<M, F, traits::unwrap_t<M>>) -> monas<T>&& {
+    friend constexpr auto operator|(monas&& self, F&& f) noexcept(std::is_nothrow_invocable_r_v<M, F, traits::unwrap_t<T>>) -> monas<T>&& {
       if (self) {
         cpo::unit(self.m_monad, f(*self));
       }
@@ -301,6 +371,16 @@ namespace harmony::inline concepts {
 
 namespace harmony::detail {
 
+  template<typename F, typename M, typename R>
+  consteval bool check_nothrow_map() {
+    bool common = noexcept(cpo::unwrap(std::declval<M>())) and std::is_nothrow_invocable_v<F, traits::unwrap_t<M>>;
+    if constexpr (unwrappable<R>) {
+      return common and std::is_nothrow_constructible_v<monas<R>, R>;
+    } else {
+      return common and std::is_nothrow_constructible_v<monas<sachet<std::remove_cvref_t<R>>>, R>;
+    }
+  }
+
   template<typename F>
   struct map_impl {
 
@@ -319,8 +399,7 @@ namespace harmony::detail {
 
     template<unwrappable M>
       requires not_void_resulted<F, traits::unwrap_t<M>>
-    [[nodiscard]]
-    friend constexpr specialization_of<monas> auto operator|(M&& m, map_impl self) {
+    friend constexpr specialization_of<monas> auto operator|(M&& m, map_impl self) noexcept(check_nothrow_map<F, M, std::invoke_result_t<F, traits::unwrap_t<M>>>()) {
       if constexpr (maybe<M>) {
         // 一応チェックする
         assert(cpo::validate(m));
@@ -336,7 +415,7 @@ namespace harmony::detail {
 
 namespace harmony::inline monadic_op {
 
-  inline constexpr auto map = []<typename F>(F&& f) -> detail::map_impl<F> {
+  inline constexpr auto map = []<typename F>(F&& f) noexcept(std::is_nothrow_move_constructible_v<F>) -> detail::map_impl<F> {
     return detail::map_impl{ .fmap = std::forward<F>(f) };
   };
 
@@ -346,75 +425,12 @@ namespace harmony::inline monadic_op {
 
 namespace harmony::detail {
 
-  template<typename T>
-  concept nullable = requires(T& t) {
-    t = nullptr;
-  };
+  template<typename F, typename M, typename R>
+  inline constexpr bool check_nothrow_and_then_v =
+    std::is_nothrow_invocable_v<F, traits::unwrap_t<M>> and
+    std::is_nothrow_constructible_v<monas<R>, R> and
+    std::is_nothrow_constructible_v<monas<R>, traits::unwrap_other_t<M>>;
 
-  template<typename T>
-  concept has_error_func = requires(T&& t) {
-    {std::forward<T>(t).error()} -> not_void;
-  };
-
-  template<typename T>
-  concept has_unwrap_err_func = requires(T&& t) {
-    {std::forward<T>(t).unwrap_err()} -> not_void;
-  };
-
-
-  struct unwrap_other_impl {
-
-    template<typename T>
-    constexpr auto operator()(const std::optional<T>&) const noexcept -> std::nullopt_t {
-      return std::nullopt;
-    }
-
-    template<maybe T>
-      requires nullable<T>
-    constexpr auto operator()(const T&) const noexcept -> std::nullptr_t {
-      return nullptr;
-    }
-
-    template<maybe T>
-      requires has_error_func<T>
-    constexpr auto&& operator()(T&& t) const noexcept(noexcept(std::forward<T>(t).error())) {
-      return std::forward<T>(t).error();
-    }
-
-    template<maybe T>
-      requires (not has_error_func<T>) and
-               has_unwrap_err_func<T>
-    constexpr auto&& operator()(T&& t) const noexcept(noexcept(std::forward<T>(t).unwrap_err())) {
-      return std::forward<T>(t).unwrap_err();
-    }
-  };
-
-} // namespace harmony::detail
-
-namespace harmony::inline cpo {
-  inline constexpr detail::unwrap_other_impl unwrap_other{};
-}
-
-namespace harmony::inline concepts {
-
-  template<typename T>
-  concept either = 
-    maybe<T> and
-    requires(T&& t) {
-      {cpo::unwrap_other(std::forward<T>(t))} -> not_void;
-    };
-} // namespace harmony::inline concepts
-
-namespace harmony::traits {
-
-  template<typename T>
-  using unwrap_other_raw_t = decltype(harmony::cpo::unwrap_other(std::declval<T>()));
-  
-  template<typename T>
-  using unwrap_other_t = std::remove_cvref_t<unwrap_other_raw_t<T>>;
-}
-
-namespace harmony::detail {
 
   template<typename F>
   struct and_then_impl {
@@ -424,9 +440,8 @@ namespace harmony::detail {
     template<either M>
       requires std::invocable<F, traits::unwrap_t<M>> and
                either<std::invoke_result_t<F, traits::unwrap_t<M>>> and
-               std::constructible_from<std::remove_reference_t<std::invoke_result_t<F, traits::unwrap_t<M>>>, traits::unwrap_other_raw_t<M>>
-    [[nodiscard]]
-    friend constexpr specialization_of<monas> auto operator|(M&& m, and_then_impl self) {
+               std::constructible_from<std::remove_reference_t<std::invoke_result_t<F, traits::unwrap_t<M>>>, traits::unwrap_other_t<M>>
+    friend constexpr specialization_of<monas> auto operator|(M&& m, and_then_impl self) noexcept(check_nothrow_and_then_v<F, M, std::remove_reference_t<std::invoke_result_t<F, traits::unwrap_t<M>>>>) {
       // 呼び出し結果が左辺値参照を返すとき、コピーされることになる
       // mが有効値を保持していないとき、戻り値のmonasはmの無効値をムーブするしかない（参照するのは危険）
       using ret_either_t = std::remove_reference_t<decltype(self.fmap(cpo::unwrap(std::forward<M>(m))))>;
@@ -437,6 +452,14 @@ namespace harmony::detail {
         return monas<ret_either_t>(cpo::unwrap_other(std::forward<M>(m)));
       }
     }
+
+    template<either M>
+      requires requires(M&& m) {
+        cpo::unwrap(std::forward<M>(m)).and_then(std::declval<F&>());
+      }
+    friend constexpr specialization_of<monas> auto operator|(M&& m, and_then_impl self) noexcept(noexcept(monas(cpo::unwrap(std::forward<M>(m)).and_then(self.fmap)))) {
+      return monas(cpo::unwrap(std::forward<M>(m)).and_then(self.fmap));
+    }
   };
   
   template<typename F>
@@ -445,7 +468,7 @@ namespace harmony::detail {
 
 namespace harmony::inline monadic_op {
 
-  inline constexpr auto and_then = []<typename F>(F&& f) -> detail::and_then_impl<F> {
+  inline constexpr auto and_then = []<typename F>(F&& f) noexcept(std::is_nothrow_move_constructible_v<F>) -> detail::and_then_impl<F> {
     return detail::and_then_impl{ .fmap = std::forward<F>(f) };
   };
 }

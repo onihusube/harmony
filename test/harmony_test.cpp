@@ -32,7 +32,7 @@ struct simple_result {
     return ok;
   }
 
-  auto unwrap_err() -> E& {
+  auto error() -> E& {
     return err;
   }
 
@@ -47,6 +47,9 @@ namespace ut = boost::ut;
 int main() {
   using namespace boost::ut::literals;
   using namespace boost::ut::operators::terse;
+
+  harmony::sachet<double> t{1.0};
+  harmony::unit(t, 2.0);
 
   "concept unwrappable test"_test = [] {
     ut::expect(harmony::unwrappable<int*>);
@@ -198,6 +201,13 @@ int main() {
   "type monas test"_test = [] {
     ut::expect(harmony::unwrappable<harmony::monas<std::optional<int> &>>);
     ut::expect(harmony::maybe<harmony::monas<std::optional<int> &>>);
+    ut::expect(harmony::either<harmony::monas<std::optional<int> &>>);
+    ut::expect(harmony::unwrappable<harmony::monas<std::optional<int>>>);
+    ut::expect(harmony::maybe<harmony::monas<std::optional<int>>>);
+    ut::expect(harmony::either<harmony::monas<std::optional<int>>>);
+    ut::expect(harmony::unwrappable<harmony::monas<int*>>);
+    ut::expect(harmony::maybe<harmony::monas<int*>>);
+    ut::expect(harmony::either<harmony::monas<int*>>);
 
     std::optional<int> opt = 10;
 
@@ -289,5 +299,24 @@ int main() {
 
     !ut::expect(harmony::validate(opt));
     24021.0_d == harmony::unwrap(opt);
+  };
+
+  "and_then test"_test = []() {
+    using namespace harmony::monadic_op;
+
+    auto opt = harmony::monas(std::optional<int>{10}) 
+      | [](int n) { return n + n; }
+      | and_then([](int n) { return std::optional<int>{n + 100}; })
+      | [](int n) { return ++n;}
+      | and_then([](int n) { return std::optional<double>(double(n)); });
+
+    !ut::expect(harmony::validate(opt));
+    121.0_d == harmony::unwrap(opt);
+
+    auto fail = ~opt
+      | [](double) { return std::nullopt; }
+      | and_then([](double d) { assert(false); return std::optional<double>(++d); });
+
+    ut::expect(not harmony::validate(fail));
   };
 }

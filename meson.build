@@ -16,7 +16,7 @@ vs_files = ['include/harmony.hpp', 'test/harmony_test.cpp']
 include_dir = include_directories('include')
 
 #依存プロジェクト
-boostut_proj = subproject('ut')
+boostut_proj = subproject('boost.ut')
 boostut_dep = boostut_proj.get_variable('boostut_dep')
 
 exe = executable('harmony_test', 'test/harmony_test.cpp', include_directories : include_dir, extra_files : vs_files, cpp_args : options, dependencies : boostut_dep)
