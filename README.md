@@ -9,8 +9,8 @@ A monadic type, for example...
 - Pointer
 - Smart Pointer (`std::unique_ptr<T>, std::shared_ptr<T>`)
 - `std::optional<T>`
-- Container types (`std::vector<T>, std::list<T>... etc`)
-    - Under implementation
+- Containers (`std::vector<T>, std::list<T>... etc`)
+- `Either<L, R>` (`Result<T, E>`) like types
 - Any program defined types that can recognized monad
 
 ## Example

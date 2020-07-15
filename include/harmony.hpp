@@ -494,8 +494,9 @@ namespace harmony::detail {
 
     template<unwrappable M>
       requires std::convertible_to<traits::unwrap_t<M>, T>
+    [[nodiscard]]
     friend constexpr auto operator|(monas<M>&& m, to_value_impl) noexcept(noexcept(T(*std::move(m)))) -> T {
-      return T(*std::move(m));
+      return T(std::move(*m));
     }
   };
 }

@@ -314,12 +314,12 @@ int main() {
         | [](int n) { return 2*n; }
         | [](int n) { return n + 1;}
         | map([](auto& vec) {
-          int s{};
-          for (int n : vec) {
-            s += n;
-          }
-          return s;
-        })
+            int s{};
+            for (int n : vec) {
+              s += n;
+            }
+            return s;
+          })
         | to_value<int>;
 
       35_i == sum;
