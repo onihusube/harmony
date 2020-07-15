@@ -49,6 +49,7 @@ namespace harmony::detail {
     }
 
     template<std::ranges::range R>
+      requires (not weakly_indirectly_readable<R>)
     [[nodiscard]]
     constexpr auto operator()(R&& r) const noexcept -> R&& {
       return std::forward<R>(r);
@@ -320,6 +321,19 @@ namespace harmony {
       return std::move(self);
     }
 
+    template<typename F>
+      requires list<M>
+    friend constexpr auto operator|(monas&& self, F&& f) -> monas<T>&& requires monadic<F, std::ranges::iterator_t<T>> {
+      auto it = std::ranges::begin(*self);
+      const auto fin = std::ranges::end(*self);
+
+      for (; it != fin; ++it) {
+        cpo::unit(it, f(*it));
+      }
+
+      return std::move(self);
+    }
+
     [[nodiscard]]
     friend constexpr auto operator~(monas& self) noexcept -> monas<T>&& {
       return std::move(self);
@@ -455,7 +469,7 @@ namespace harmony::detail {
 
     template<either M>
       requires requires(M&& m) {
-        cpo::unwrap(std::forward<M>(m)).and_then(std::declval<F&>());
+        {cpo::unwrap(std::forward<M>(m)).and_then(std::declval<F&>())} -> either;
       }
     friend constexpr specialization_of<monas> auto operator|(M&& m, and_then_impl self) noexcept(noexcept(monas(cpo::unwrap(std::forward<M>(m)).and_then(self.fmap)))) {
       return monas(cpo::unwrap(std::forward<M>(m)).and_then(self.fmap));

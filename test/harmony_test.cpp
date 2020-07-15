@@ -281,24 +281,48 @@ int main() {
       // 参照元には失敗直前の結果が入る
       0_i == n;
     }
+    {
+      auto r = harmony::monas(std::vector<int>{1, 2, 3, 4, 5})
+        | [](int n) { return 2*n; }
+        | [](int n) { return n + 1;};
+
+      !ut::expect(harmony::validate(r));
+
+      ut::expect(std::vector<int>{3, 5, 7, 9, 11} == harmony::unwrap(r));
+    }
   };
 
   "map test"_test = [] {
     using namespace harmony::monadic_op;
+    {
+      int n = 10;
 
-    int n = 10;
+      auto opt = harmony::monas(&n) 
+        | [](int n) { return n + n; }
+        | [](int n) { return n + 100; }
+        | map([](int n) { return float(n) + 0.1f;})
+        | map([](float f) { return double(f);})
+        | [](double d) { return d + d;}
+        | transform([](double d) { return std::optional<double>{d + 0.01};})
+        | [](double d) { return std::ceil(d * 100.0); };
 
-    auto opt = harmony::monas(&n) 
-      | [](int n) { return n + n; }
-      | [](int n) { return n + 100; }
-      | map([](int n) { return float(n) + 0.1f;})
-      | map([](float f) { return double(f);})
-      | [](double d) { return d + d;}
-      | transform([](double d) { return std::optional<double>{d + 0.01};})
-      | [](double d) { return std::ceil(d * 100.0); };
+      !ut::expect(harmony::validate(opt));
+      24021.0_d == harmony::unwrap(opt);
+    }
+    {
+      auto sum = harmony::monas(std::vector<int>{1, 2, 3, 4, 5})
+        | [](int n) { return 2*n; }
+        | [](int n) { return n + 1;}
+        | map([](auto& vec) {
+          int s{};
+          for (int n : vec) {
+            s += n;
+          }
+          return s;
+        });
 
-    !ut::expect(harmony::validate(opt));
-    24021.0_d == harmony::unwrap(opt);
+      35_i == *sum;
+    }
   };
 
   "and_then test"_test = []() {
