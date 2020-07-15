@@ -486,3 +486,23 @@ namespace harmony::inline monadic_op {
     return detail::and_then_impl{ .fmap = std::forward<F>(f) };
   };
 }
+
+namespace harmony::detail {
+
+  template<typename T>
+  struct to_value_impl {
+
+    template<unwrappable M>
+      requires std::convertible_to<traits::unwrap_t<M>, T>
+    friend constexpr auto operator|(monas<M>&& m, to_value_impl) noexcept(noexcept(T(*std::move(m)))) -> T {
+      return T(*std::move(m));
+    }
+  };
+}
+
+namespace harmony::inline monadic_op {
+
+  template<typename T>
+  inline constexpr detail::to_value_impl<T> to_value;
+
+} // namespace harmony::inline monadic_op

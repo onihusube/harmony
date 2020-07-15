@@ -319,9 +319,10 @@ int main() {
             s += n;
           }
           return s;
-        });
+        })
+        | to_value<int>;
 
-      35_i == *sum;
+      35_i == sum;
     }
   };
 
