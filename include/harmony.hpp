@@ -15,10 +15,24 @@ namespace harmony::inline concepts {
     typename with_reference<T>;
   };
 
+  /**
+  * @brief operator*による単純な間接参照が可能
+  */
   template<typename T>
   concept weakly_indirectly_readable = requires(T&& t) {
     {*std::forward<T>(t)} -> not_void;
   };
+
+  /**
+  * @brief 縮小変換を起こさずにFrom -> Toへ変換可能
+  */
+  template<typename From, typename To>
+  concept without_narrowing_convertible =
+    std::convertible_to<From, To> and
+    requires (From&& x) {
+      { std::type_identity_t<To[]>{std::forward<From>(x)} } -> std::same_as<To[1]>;
+    };
+
 }
 
 namespace harmony::detail {
@@ -493,7 +507,7 @@ namespace harmony::detail {
   struct to_value_impl {
 
     template<unwrappable M>
-      requires std::convertible_to<traits::unwrap_t<M>, T>
+      requires without_narrowing_convertible<traits::unwrap_t<M>, T>
     [[nodiscard]]
     friend constexpr auto operator|(monas<M>&& m, to_value_impl) noexcept(noexcept(T(*std::move(m)))) -> T {
       return T(std::move(*m));
