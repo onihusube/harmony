@@ -267,6 +267,11 @@ namespace harmony::traits {
 
 namespace harmony {
 
+  namespace detail {
+    template<typename M, typename F, typename R = std::invoke_result_t<F, traits::unwrap_t<M&>>>
+    inline constexpr bool monadic_noexecpt_v = noexcept(cpo::unit(std::declval<M&>(), std::declval<R>()));
+  }
+
   template<unwrappable T>
   class monas {
 
@@ -321,14 +326,14 @@ namespace harmony {
   public:
 
     template<monadic<M> F>
-    friend constexpr auto operator|(monas&& self, F&& f) noexcept(std::is_nothrow_invocable_r_v<M, F, traits::unwrap_t<T>>) -> monas<T>&& {
+    friend constexpr auto operator|(monas&& self, F&& f) noexcept(detail::monadic_noexecpt_v<T, F>) -> monas<T>&& {
       cpo::unit(self.m_monad, f(*self));
       return std::move(self);
     }
     
     template<monadic<M> F>
       requires maybe<M>
-    friend constexpr auto operator|(monas&& self, F&& f) noexcept(std::is_nothrow_invocable_r_v<M, F, traits::unwrap_t<T>>) -> monas<T>&& {
+    friend constexpr auto operator|(monas&& self, F&& f) noexcept(noexcept(bool(self)) and detail::monadic_noexecpt_v<T, F>) -> monas<T>&& {
       if (self) {
         cpo::unit(self.m_monad, f(*self));
       }
@@ -337,7 +342,7 @@ namespace harmony {
 
     template<typename F>
       requires list<M>
-    friend constexpr auto operator|(monas&& self, F&& f) -> monas<T>&& requires monadic<F, std::ranges::iterator_t<T>> {
+    friend constexpr auto operator|(monas&& self, F&& f) noexcept(detail::monadic_noexecpt_v<std::ranges::iterator_t<T>, F>) -> monas<T>&& requires monadic<F, std::ranges::iterator_t<T>> {
       auto it = std::ranges::begin(*self);
       const auto fin = std::ranges::end(*self);
 
@@ -483,10 +488,10 @@ namespace harmony::detail {
 
     template<either M>
       requires requires(M&& m) {
-        {cpo::unwrap(std::forward<M>(m)).and_then(std::declval<F&>())} -> either;
+        {std::forward<M>(m).and_then(std::declval<F&>())} -> either;
       }
-    friend constexpr specialization_of<monas> auto operator|(M&& m, and_then_impl self) noexcept(noexcept(monas(cpo::unwrap(std::forward<M>(m)).and_then(self.fmap)))) {
-      return monas(cpo::unwrap(std::forward<M>(m)).and_then(self.fmap));
+    friend constexpr specialization_of<monas> auto operator|(M&& m, and_then_impl self) noexcept(noexcept(monas(std::forward<M>(m).and_then(self.fmap)))) {
+      return monas(std::forward<M>(m).and_then(self.fmap));
     }
   };
   
@@ -498,6 +503,58 @@ namespace harmony::inline monadic_op {
 
   inline constexpr auto and_then = []<typename F>(F&& f) noexcept(std::is_nothrow_move_constructible_v<F>) -> detail::and_then_impl<F> {
     return detail::and_then_impl{ .fmap = std::forward<F>(f) };
+  };
+}
+
+namespace harmony::detail {
+
+  template<typename F, typename M, typename R = std::remove_reference_t<std::invoke_result_t<F, traits::unwrap_other_t<M>>>>
+  inline constexpr bool check_nothrow_or_else_v =
+    std::is_nothrow_invocable_v<F, traits::unwrap_other_t<M>> and
+    std::is_nothrow_constructible_v<monas<R>, R> and
+    std::is_nothrow_constructible_v<monas<R>, traits::unwrap_t<M>>;
+
+
+  template<typename F>
+  struct or_else_impl {
+
+    [[no_unique_address]] F fmap;
+
+    template<either M>
+      requires std::invocable<F, traits::unwrap_other_t<M>> and
+               either<std::invoke_result_t<F, traits::unwrap_other_t<M>>> and
+               std::constructible_from<std::remove_reference_t<std::invoke_result_t<F, traits::unwrap_other_t<M>>>, traits::unwrap_t<M>>
+    friend constexpr specialization_of<monas> auto operator|(M&& m, or_else_impl self) noexcept(check_nothrow_or_else_v<F, M>) {
+      // 呼び出し結果が左辺値参照を返すとき、コピーされることになる
+      // mが有効値を保持しているとき、戻り値のmonasはmの有効値をムーブするしかない（参照するのは危険）
+      using ret_either_t = std::remove_reference_t<decltype(self.fmap(cpo::unwrap_other(std::forward<M>(m))))>;
+
+      if (cpo::validate(m)) {
+        return monas<ret_either_t>(cpo::unwrap(std::forward<M>(m)));
+      } else {
+        return monas<ret_either_t>(self.fmap(cpo::unwrap_other(std::forward<M>(m))));
+      }
+    }
+
+    template<either M>
+      requires requires(M&& m) {
+        {std::forward<M>(m).or_else(std::declval<F&>())} -> either;
+      }
+    friend constexpr specialization_of<monas> auto operator|(M&& m, or_else_impl self) noexcept(noexcept(monas(std::forward<M>(m).or_else(self.fmap)))) {
+      return monas(std::forward<M>(m).or_else(self.fmap));
+    }
+    
+  };
+  
+  template<typename F>
+  or_else_impl(F&&) -> or_else_impl<F>;
+
+} // namespace harmony::detail
+
+namespace harmony::inline monadic_op {
+
+  inline constexpr auto or_else = []<typename F>(F&& f) noexcept(std::is_nothrow_move_constructible_v<F>) -> detail::or_else_impl<F> {
+    return detail::or_else_impl{ .fmap = std::forward<F>(f) };
   };
 }
 

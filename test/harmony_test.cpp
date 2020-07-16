@@ -344,4 +344,24 @@ int main() {
 
     ut::expect(not harmony::validate(fail));
   };
+
+  "or_else test"_test = [] {
+    using namespace harmony::monadic_op;
+    
+    auto opt = harmony::monas(std::optional<int>{10}) 
+      | [](int) { return std::nullopt; }
+      | and_then([](int n) { return std::optional<int>{n + 100}; })
+      | or_else([](auto) { return std::optional<double>{1.0};})
+      | [](double d) { return 2.0 * d;};
+
+    !ut::expect(harmony::validate(opt));
+    2.0_d == harmony::unwrap(opt);
+
+    auto success = ~opt
+      | or_else([](auto) { assert(false); return std::optional<double>(1.0); })
+      | or_else([](auto) { assert(false); return std::optional<double>(3.0); });
+
+    ut::expect(harmony::validate(success));
+    2.0_d == harmony::unwrap(success);
+  };
 }
