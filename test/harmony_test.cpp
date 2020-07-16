@@ -2,6 +2,9 @@
 #include <vector>
 #include <cmath>
 #include <string>
+#include <memory>
+#include <list>
+#include <array>
 
 #include "boost/ut.hpp"
 #include "expected.hpp"
@@ -49,13 +52,12 @@ int main() {
   using namespace boost::ut::literals;
   using namespace boost::ut::operators::terse;
 
-  harmony::sachet<double> t{1.0};
-  harmony::unit(t, 2.0);
-
   "concept unwrappable test"_test = [] {
     ut::expect(harmony::unwrappable<int*>);
     ut::expect(harmony::unwrappable<std::optional<int>>);
     ut::expect(harmony::unwrappable<std::vector<int>>);
+    ut::expect(harmony::unwrappable<std::unique_ptr<int>>);
+    ut::expect(harmony::unwrappable<std::shared_ptr<int>>);
     ut::expect(harmony::unwrappable<simple_result<int, std::string>>);
     ut::expect(harmony::unwrappable<tl::expected<int, std::string>>);
   };
@@ -64,6 +66,8 @@ int main() {
     ut::expect(harmony::maybe<int *>);
     ut::expect(harmony::maybe<std::optional<int>>);
     ut::expect(harmony::maybe<std::vector<int>>);
+    ut::expect(harmony::maybe<std::unique_ptr<int>>);
+    ut::expect(harmony::maybe<std::shared_ptr<int>>);
     ut::expect(harmony::maybe<simple_result<int, std::string>>);
     ut::expect(harmony::maybe<tl::expected<int, std::string>>);
   };
@@ -72,6 +76,8 @@ int main() {
     ut::expect(not harmony::list<int *>);
     ut::expect(not harmony::list<std::optional<int>>);
     ut::expect(harmony::list<std::vector<int>>);
+    ut::expect(harmony::list<std::list<int>>);
+    ut::expect(harmony::list<std::array<int, 5>>);
   };
 
   "concept rewrappable test"_test = [] {
@@ -92,6 +98,8 @@ int main() {
   "concept either test"_test = [] {
     ut::expect(harmony::either<int*>);
     ut::expect(harmony::either<std::optional<int>>);
+    ut::expect(harmony::either<std::unique_ptr<int>>);
+    ut::expect(harmony::either<std::shared_ptr<int>>);
     ut::expect(harmony::either<simple_result<int, std::string>>);
     ut::expect(harmony::either<tl::expected<int, std::string>>);
   };

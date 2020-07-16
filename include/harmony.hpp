@@ -3,6 +3,7 @@
 #include <ranges>
 #include <cassert>
 #include <optional>
+#include <variant>
 
 
 namespace harmony::inline concepts {
@@ -383,9 +384,50 @@ namespace harmony {
   template<typename T>
   monas(T&&) -> monas<std::remove_cv_t<T>>;
 
-
-  template<typename T>
+  /**
+  * @brief Eitherとなる単純なラッパー
+  * @tparam R 有効値の値
+  * @tparam L 無効値の値
+  */
+  template<typename L, typename R>
   struct sachet {
+    std::variant<L, R> value;
+  
+    [[nodiscard]]
+    constexpr auto operator*() & noexcept -> R& {
+      return std::get<1>(value);
+    }
+
+    [[nodiscard]]
+    constexpr auto operator*() && noexcept -> R&& {
+      return std::get<1>(std::move(value));
+    }
+
+    [[nodiscard]]
+    constexpr operator bool() const noexcept {
+      return value.index() == 1ull;
+    }
+
+    [[nodiscard]]
+    constexpr auto unwrap_err() & noexcept -> L& {
+      return std::get<0>(value);
+    }
+
+    [[nodiscard]]
+    constexpr auto unwrap_err() && noexcept -> L&& {
+      return std::get<0>(std::move(value));
+    }
+    
+  };
+
+  struct nil{};
+
+  /**
+  * @brief unwrappableな単純なラッパー
+  * @tparam T 保持する値の型
+  */
+  template<typename T>
+  struct sachet<T, nil> {
     T value;
 
     [[nodiscard]]
@@ -400,8 +442,10 @@ namespace harmony {
   };
   
   template<typename T>
-  sachet(T&&) -> sachet<std::remove_cvref_t<T>>;
-}
+  sachet(T&&) -> sachet<std::remove_cvref_t<T>, nil>;
+
+
+} // namespace harmony
 
 namespace harmony::inline concepts {
 
@@ -431,7 +475,7 @@ namespace harmony::detail {
     if constexpr (unwrappable<R>) {
       return common and std::is_nothrow_constructible_v<monas<R>, R>;
     } else {
-      return common and std::is_nothrow_constructible_v<monas<sachet<std::remove_cvref_t<R>>>, R>;
+      return common and std::is_nothrow_constructible_v<monas<sachet<std::remove_cvref_t<R>, nil>>, R>;
     }
   }
 
@@ -454,12 +498,37 @@ namespace harmony::detail {
     template<unwrappable M>
       requires not_void_resulted<F, traits::unwrap_t<M>>
     friend constexpr specialization_of<monas> auto operator|(M&& m, map_impl self) noexcept(check_nothrow_map<F, M, std::invoke_result_t<F, traits::unwrap_t<M>>>()) {
-      if constexpr (maybe<M>) {
-        // 一応チェックする
-        assert(cpo::validate(m));
-      }
       return self.invoke_impl<unwrappable<std::invoke_result_t<F, traits::unwrap_t<M>>>>(cpo::unwrap(std::forward<M>(m)));
     }
+
+    // template<either M>
+    //   requires not_void_resulted<F, traits::unwrap_t<M>>
+    // friend constexpr specialization_of<monas> auto operator|(M&& m, map_impl self) {
+    //   // 有効値の型
+    //   using R = std::remove_cvref_t<std::invoke_result_t<F, traits::unwrap_t<M>>>;
+    //   // 無効値の型
+    //   using L = std::remove_cvref_t<traits::unwrap_other_t<M>>;
+    //   // 戻り値型がeitherコンセプトのモデルであるかどうか
+    //   constexpr bool is_eiher_r = either<R>;
+      
+    //   if (cpo::validate(m)) {
+    //     if constexpr (is_eiher_r) {
+    //       // map結果がeitherならば、単にmonasで包んで返す
+    //       return monas(self.fmap(cpo::unwrap(std::forward<M>(m))));
+    //     } else {
+    //       // map結果がeitherではない時、sachetで包んでmonasで包んで返す
+    //       return monas(sachet<L, R>{ .value = std::variant<L, R>(std::in_place_index<1>, self.fmap(cpo::unwrap(std::forward<M>(m)))) });
+    //     }
+    //   } else {
+    //     if constexpr (is_eiher_r) {
+    //       // map結果がeitherならば、単にmonasで包んで返す
+    //       return monas(R(cpo::unwrap_other(std::forward<M>(m))));
+    //     } else {
+    //       // map結果がeitherではない時、sachetで包んでmonasで包んで返す
+    //       return monas(sachet<L, R>{ .value = std::variant<L, R>(std::in_place_index<0>, cpo::unwrap_other(std::forward<M>(m))) });
+    //     }
+    //   }
+    // }
   };
 
   template<typename F>
