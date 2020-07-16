@@ -458,11 +458,16 @@ namespace harmony::inline monadic_op {
 
 namespace harmony::detail {
 
-  template<typename F, typename M, typename R>
+  template<typename F, typename M, typename R = std::remove_reference_t<std::invoke_result_t<F, traits::unwrap_t<M>>>>
   inline constexpr bool check_nothrow_and_then_v =
     std::is_nothrow_invocable_v<F, traits::unwrap_t<M>> and
     std::is_nothrow_constructible_v<monas<R>, R> and
     std::is_nothrow_constructible_v<monas<R>, traits::unwrap_other_t<M>>;
+  
+  template<typename T, typename F>
+  concept and_then_reusable = requires(T&& t, F& f) {
+    { std::forward<T>(t).and_then(f)} -> either;
+  };
 
 
   template<typename F>
@@ -471,10 +476,11 @@ namespace harmony::detail {
     [[no_unique_address]] F fmap;
     
     template<either M>
-      requires std::invocable<F, traits::unwrap_t<M>> and
+      requires (not and_then_reusable<M, F>) and
+               std::invocable<F, traits::unwrap_t<M>> and
                either<std::invoke_result_t<F, traits::unwrap_t<M>>> and
                std::constructible_from<std::remove_reference_t<std::invoke_result_t<F, traits::unwrap_t<M>>>, traits::unwrap_other_t<M>>
-    friend constexpr specialization_of<monas> auto operator|(M&& m, and_then_impl self) noexcept(check_nothrow_and_then_v<F, M, std::remove_reference_t<std::invoke_result_t<F, traits::unwrap_t<M>>>>) {
+    friend constexpr specialization_of<monas> auto operator|(M&& m, and_then_impl self) noexcept(noexcept(cpo::validate(m)) and check_nothrow_and_then_v<F, M>) {
       // 呼び出し結果が左辺値参照を返すとき、コピーされることになる
       // mが有効値を保持していないとき、戻り値のmonasはmの無効値をムーブするしかない（参照するのは危険）
       using ret_either_t = std::remove_reference_t<decltype(self.fmap(cpo::unwrap(std::forward<M>(m))))>;
@@ -487,9 +493,7 @@ namespace harmony::detail {
     }
 
     template<either M>
-      requires requires(M&& m) {
-        {std::forward<M>(m).and_then(std::declval<F&>())} -> either;
-      }
+      requires and_then_reusable<M, F>
     friend constexpr specialization_of<monas> auto operator|(M&& m, and_then_impl self) noexcept(noexcept(monas(std::forward<M>(m).and_then(self.fmap)))) {
       return monas(std::forward<M>(m).and_then(self.fmap));
     }
@@ -514,6 +518,10 @@ namespace harmony::detail {
     std::is_nothrow_constructible_v<monas<R>, R> and
     std::is_nothrow_constructible_v<monas<R>, traits::unwrap_t<M>>;
 
+  template<typename T, typename F>
+  concept or_else_reusable = requires(T&& t, F& f) {
+    { std::forward<T>(t).or_else(f)} -> either;
+  };
 
   template<typename F>
   struct or_else_impl {
@@ -521,10 +529,11 @@ namespace harmony::detail {
     [[no_unique_address]] F fmap;
 
     template<either M>
-      requires std::invocable<F, traits::unwrap_other_t<M>> and
+      requires (not or_else_reusable<M, F>) and
+               std::invocable<F, traits::unwrap_other_t<M>> and
                either<std::invoke_result_t<F, traits::unwrap_other_t<M>>> and
                std::constructible_from<std::remove_reference_t<std::invoke_result_t<F, traits::unwrap_other_t<M>>>, traits::unwrap_t<M>>
-    friend constexpr specialization_of<monas> auto operator|(M&& m, or_else_impl self) noexcept(check_nothrow_or_else_v<F, M>) {
+    friend constexpr specialization_of<monas> auto operator|(M&& m, or_else_impl self) noexcept(noexcept(cpo::validate(m)) and check_nothrow_or_else_v<F, M>) {
       // 呼び出し結果が左辺値参照を返すとき、コピーされることになる
       // mが有効値を保持しているとき、戻り値のmonasはmの有効値をムーブするしかない（参照するのは危険）
       using ret_either_t = std::remove_reference_t<decltype(self.fmap(cpo::unwrap_other(std::forward<M>(m))))>;
@@ -537,9 +546,7 @@ namespace harmony::detail {
     }
 
     template<either M>
-      requires requires(M&& m) {
-        {std::forward<M>(m).or_else(std::declval<F&>())} -> either;
-      }
+      requires or_else_reusable<M, F>
     friend constexpr specialization_of<monas> auto operator|(M&& m, or_else_impl self) noexcept(noexcept(monas(std::forward<M>(m).or_else(self.fmap)))) {
       return monas(std::forward<M>(m).or_else(self.fmap));
     }
