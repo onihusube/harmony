@@ -4,6 +4,7 @@
 #include <string>
 
 #include "boost/ut.hpp"
+#include "expected.hpp"
 #include "harmony.hpp"
 
 template<typename T, typename E>
@@ -25,7 +26,7 @@ struct simple_result {
   simple_result(E&& v)
     : ok{}
     , err(std::forward<U>(v))
-    , is_ok_v{true}
+    , is_ok_v{false}
   {}
 
   auto unwrap() -> T& {
@@ -56,6 +57,7 @@ int main() {
     ut::expect(harmony::unwrappable<std::optional<int>>);
     ut::expect(harmony::unwrappable<std::vector<int>>);
     ut::expect(harmony::unwrappable<simple_result<int, std::string>>);
+    ut::expect(harmony::unwrappable<tl::expected<int, std::string>>);
   };
 
   "concept maybe test"_test = [] {
@@ -63,6 +65,7 @@ int main() {
     ut::expect(harmony::maybe<std::optional<int>>);
     ut::expect(harmony::maybe<std::vector<int>>);
     ut::expect(harmony::maybe<simple_result<int, std::string>>);
+    ut::expect(harmony::maybe<tl::expected<int, std::string>>);
   };
 
   "concept list test"_test = [] {
@@ -82,12 +85,15 @@ int main() {
     ut::expect(harmony::rewrappable<int*, int*>);
     ut::expect(harmony::rewrappable<simple_result<int, std::string>, int>);
     ut::expect(not harmony::rewrappable<simple_result<int, std::string>, std::string>);
+    ut::expect(harmony::rewrappable<tl::expected<int, std::string>, int>);
+    ut::expect(not harmony::rewrappable<tl::expected<int, std::string>, std::string>);
   };
 
   "concept either test"_test = [] {
     ut::expect(harmony::either<int*>);
     ut::expect(harmony::either<std::optional<int>>);
     ut::expect(harmony::either<simple_result<int, std::string>>);
+    ut::expect(harmony::either<tl::expected<int, std::string>>);
   };
 
   "cpo unwrap test"_test = [] {
@@ -290,6 +296,18 @@ int main() {
 
       ut::expect(std::vector<int>{3, 5, 7, 9, 11} == harmony::unwrap(r));
     }
+    {
+      tl::expected<int, std::string> ex{10};
+
+      auto r = harmony::monas(ex)
+        | [](int n) { return 2*n; }
+        | [](int n) { return n + 1;};
+
+      ut::expect(harmony::validate(r));
+      // 状態は起点のオブジェクトに伝搬する
+      ut::expect(*r == ex);
+      21_i == harmony::unwrap(r);
+    }
   };
 
   "map test"_test = [] {
@@ -329,39 +347,82 @@ int main() {
   "and_then test"_test = []() {
     using namespace harmony::monadic_op;
 
-    auto opt = harmony::monas(std::optional<int>{10}) 
-      | [](int n) { return n + n; }
-      | and_then([](int n) { return std::optional<int>{n + 100}; })
-      | [](int n) { return ++n;}
-      | and_then([](int n) { return std::optional<double>(double(n)); });
+    {
+      auto opt = harmony::monas(std::optional<int>{10}) 
+        | [](int n) { return n + n; }
+        | and_then([](int n) { return std::optional<int>{n + 100}; })
+        | [](int n) { return ++n;}
+        | and_then([](int n) { return std::optional<double>(double(n)); });
 
-    !ut::expect(harmony::validate(opt));
-    121.0_d == harmony::unwrap(opt);
+      !ut::expect(harmony::validate(opt));
+      121.0_d == harmony::unwrap(opt);
 
-    auto fail = ~opt
-      | [](double) { return std::nullopt; }
-      | and_then([](double d) { assert(false); return std::optional<double>(++d); });
+      auto fail = ~opt
+        | [](double) { return std::nullopt; }
+        | and_then([](double d) { assert(false); return std::optional<double>(++d); });
 
-    ut::expect(not harmony::validate(fail));
+      ut::expect(not harmony::validate(fail));
+    }
+
+    {
+      using namespace std::string_view_literals;
+
+      tl::expected<int, std::string> ex{10};
+
+      auto r = harmony::monas(ex)
+        | and_then([](int n) { return tl::expected<int, std::string>{2*n}; })
+        | and_then([](int n) { return tl::expected<double, std::string>{double(n)};});
+
+      !ut::expect(harmony::validate(r));
+      20.0_d == harmony::unwrap(r);
+
+      ex = 20;
+      auto r2 = harmony::monas(ex)
+        | and_then([](int) { return tl::expected<int, std::string>{ tl::unexpect, "failed!"}; })
+        | and_then([](int) { assert(false); return tl::expected<int, std::string>{10};});
+
+      !ut::expect(not harmony::validate(r2));
+      ut::expect("failed!"sv == harmony::unwrap_other(r2));
+    }
   };
 
   "or_else test"_test = [] {
     using namespace harmony::monadic_op;
-    
-    auto opt = harmony::monas(std::optional<int>{10}) 
-      | [](int) { return std::nullopt; }
-      | and_then([](int n) { return std::optional<int>{n + 100}; })
-      | or_else([](auto) { return std::optional<double>{1.0};})
-      | [](double d) { return 2.0 * d;};
+    {
+      auto opt = harmony::monas(std::optional<int>{10}) 
+        | [](int) { return std::nullopt; }
+        | and_then([](int n) { return std::optional<int>{n + 100}; })
+        | or_else([](auto) { return std::optional<double>{1.0};})
+        | [](double d) { return 2.0 * d;};
 
-    !ut::expect(harmony::validate(opt));
-    2.0_d == harmony::unwrap(opt);
+      !ut::expect(harmony::validate(opt));
+      2.0_d == harmony::unwrap(opt);
 
-    auto success = ~opt
-      | or_else([](auto) { assert(false); return std::optional<double>(1.0); })
-      | or_else([](auto) { assert(false); return std::optional<double>(3.0); });
+      auto success = ~opt
+        | or_else([](auto) { assert(false); return std::optional<double>(1.0); })
+        | or_else([](auto) { assert(false); return std::optional<double>(3.0); });
 
-    ut::expect(harmony::validate(success));
-    2.0_d == harmony::unwrap(success);
+      ut::expect(harmony::validate(success));
+      2.0_d == harmony::unwrap(success);
+    }
+    {
+      using namespace std::string_view_literals;
+
+      tl::expected<int, std::string_view> ex{tl::unexpect, "expected failed test"};
+
+      auto r = harmony::monas(ex)
+        | or_else([](std::string_view str) { return tl::expected<int, std::string_view>{tl::unexpect, str.substr(0, 15)}; })
+        | or_else([](std::string_view str) { return tl::expected<int, std::string_view>{tl::unexpect, str.substr(9, 6)}; });
+
+      !ut::expect(not harmony::validate(r));
+      ut::expect("failed"sv == harmony::unwrap_other(r));
+
+      auto r2 = harmony::monas(tl::expected<int, std::string_view>{tl::unexpect, "failed"sv})
+        | or_else([](std::string_view) { return tl::expected<int, std::string_view>{20}; })
+        | or_else([](std::string_view) { assert(false); return tl::expected<int, std::string_view>{0};});
+
+      !ut::expect(harmony::validate(r2));
+      20_i == harmony::unwrap(r2);
+    }
   };
 }

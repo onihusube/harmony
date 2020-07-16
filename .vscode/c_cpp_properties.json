@@ -3,7 +3,9 @@
         {
             "name": "Mac g++",
             "includePath": [
-                "${workspaceFolder}/include"
+                "${workspaceFolder}/include",
+                "${workspaceFolder}/subprojects/ut/include",
+                "${workspaceFolder}/subprojects/expected/include/tl"
             ],
             "defines": [],
             "macFrameworkPath": [],

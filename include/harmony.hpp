@@ -270,7 +270,18 @@ namespace harmony {
   namespace detail {
     template<typename M, typename F, typename R = std::invoke_result_t<F, traits::unwrap_t<M&>>>
     inline constexpr bool monadic_noexecpt_v = noexcept(cpo::unit(std::declval<M&>(), std::declval<R>()));
+
+    template<typename F, typename T>
+    concept and_then_reusable = requires(T&& t, F&& f) {
+      { std::forward<T>(t).and_then(std::forward<F>(f))} -> either;
+    };
+
+    template<typename F, typename T>
+    concept or_else_reusable = requires(T&& t, F&& f) {
+      { std::forward<T>(t).or_else(std::forward<F>(f))} -> either;
+    };
   }
+
 
   template<unwrappable T>
   class monas {
@@ -321,6 +332,16 @@ namespace harmony {
 
     constexpr operator T&&() && noexcept requires (not has_reference) {
       return std::move(m_monad);
+    }
+
+    template<detail::and_then_reusable<M> F>
+    constexpr auto and_then(F&& f) && noexcept(noexcept(std::move(m_monad).and_then(std::forward<F>(f)))) requires either<M> {
+      return std::move(m_monad).and_then(std::forward<F>(f));
+    }
+
+    template<detail::or_else_reusable<M> F>
+    constexpr auto or_else(F&& f) && noexcept(noexcept(std::move(m_monad).or_else(std::forward<F>(f)))) requires either<M> {
+      return std::move(m_monad).or_else(std::forward<F>(f));
     }
 
   public:
@@ -464,10 +485,6 @@ namespace harmony::detail {
     std::is_nothrow_constructible_v<monas<R>, R> and
     std::is_nothrow_constructible_v<monas<R>, traits::unwrap_other_t<M>>;
   
-  template<typename T, typename F>
-  concept and_then_reusable = requires(T&& t, F& f) {
-    { std::forward<T>(t).and_then(f)} -> either;
-  };
 
 
   template<typename F>
@@ -476,7 +493,7 @@ namespace harmony::detail {
     [[no_unique_address]] F fmap;
     
     template<either M>
-      requires (not and_then_reusable<M, F>) and
+      requires (not and_then_reusable<F, M>) and
                std::invocable<F, traits::unwrap_t<M>> and
                either<std::invoke_result_t<F, traits::unwrap_t<M>>> and
                std::constructible_from<std::remove_reference_t<std::invoke_result_t<F, traits::unwrap_t<M>>>, traits::unwrap_other_t<M>>
@@ -493,7 +510,7 @@ namespace harmony::detail {
     }
 
     template<either M>
-      requires and_then_reusable<M, F>
+      requires and_then_reusable<F, M>
     friend constexpr specialization_of<monas> auto operator|(M&& m, and_then_impl self) noexcept(noexcept(monas(std::forward<M>(m).and_then(self.fmap)))) {
       return monas(std::forward<M>(m).and_then(self.fmap));
     }
@@ -518,10 +535,6 @@ namespace harmony::detail {
     std::is_nothrow_constructible_v<monas<R>, R> and
     std::is_nothrow_constructible_v<monas<R>, traits::unwrap_t<M>>;
 
-  template<typename T, typename F>
-  concept or_else_reusable = requires(T&& t, F& f) {
-    { std::forward<T>(t).or_else(f)} -> either;
-  };
 
   template<typename F>
   struct or_else_impl {
@@ -529,7 +542,7 @@ namespace harmony::detail {
     [[no_unique_address]] F fmap;
 
     template<either M>
-      requires (not or_else_reusable<M, F>) and
+      requires (not or_else_reusable<F, M>) and
                std::invocable<F, traits::unwrap_other_t<M>> and
                either<std::invoke_result_t<F, traits::unwrap_other_t<M>>> and
                std::constructible_from<std::remove_reference_t<std::invoke_result_t<F, traits::unwrap_other_t<M>>>, traits::unwrap_t<M>>
@@ -546,7 +559,7 @@ namespace harmony::detail {
     }
 
     template<either M>
-      requires or_else_reusable<M, F>
+      requires or_else_reusable<F, M>
     friend constexpr specialization_of<monas> auto operator|(M&& m, or_else_impl self) noexcept(noexcept(monas(std::forward<M>(m).or_else(self.fmap)))) {
       return monas(std::forward<M>(m).or_else(self.fmap));
     }
@@ -575,6 +588,18 @@ namespace harmony::detail {
     [[nodiscard]]
     friend constexpr auto operator|(monas<M>&& m, to_value_impl) noexcept(noexcept(T(*std::move(m)))) -> T {
       return T(std::move(*m));
+    }
+
+    template<maybe M>
+      requires std::default_initializable<T> and
+               without_narrowing_convertible<traits::unwrap_t<M>, T>
+    [[nodiscard]]
+    friend constexpr auto operator|(monas<M>&& m, to_value_impl) noexcept(noexcept(T(*std::move(m))) and std::is_nothrow_default_constructible_v<T>) -> T {
+      if (m) {
+        return T(std::move(*m));
+      } else {
+        return T();
+      }
     }
   };
 }

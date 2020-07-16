@@ -1,3 +1,6 @@
 [submodule "subprojects/ut"]
 	path = subprojects/ut
 	url = https://github.com/onihusube/ut.git
+[submodule "subprojects/expected"]
+	path = subprojects/expected
+	url = https://github.com/onihusube/expected.git
