@@ -336,6 +336,19 @@ int main() {
       24021.0_d == harmony::unwrap(opt);
     }
     {
+      auto opt = harmony::monas(std::optional<int>{10}) 
+        | [](int n) { return n + n; }
+        | [](int n) { return n + 100; }
+        | map([](int n) { return float(n) + 0.1f;})
+        | map([](float f) { return double(f);})
+        | [](double d) { return d + d;}
+        | transform([](double d) { return std::optional<double>{d + 0.01};})
+        | [](double d) { return std::ceil(d * 100.0); };
+
+      !ut::expect(harmony::validate(opt));
+      24021.0_d == harmony::unwrap(opt);
+    }
+    {
       auto sum = harmony::monas(std::vector<int>{1, 2, 3, 4, 5})
         | [](int n) { return 2*n; }
         | [](int n) { return n + 1;}
@@ -349,6 +362,20 @@ int main() {
         | to_value<int>;
 
       35_i == sum;
+    }
+    {
+      using namespace std::string_view_literals;
+      tl::expected<int, std::string> ex{10};
+
+      auto r = harmony::monas(ex)
+        | [](int n) { return 2*n; }
+        | [](int n) { return n + 1;}
+        | map([](int n) { return double(n);})
+        | [](double d) { return ++d; }
+        | map([](double d) { return std::to_string(d);});
+
+      ut::expect(harmony::validate(r));
+      "22.0"sv == harmony::unwrap(r);
     }
   };
 

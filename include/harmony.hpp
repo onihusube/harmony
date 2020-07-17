@@ -273,6 +273,11 @@ namespace harmony {
     inline constexpr bool monadic_noexecpt_v = noexcept(cpo::unit(std::declval<M&>(), std::declval<R>()));
 
     template<typename F, typename T>
+    concept map_reusable = requires(T&& t, F&& f) {
+      { std::forward<T>(t).map(std::forward<F>(f))} -> unwrappable;
+    };
+
+    template<typename F, typename T>
     concept and_then_reusable = requires(T&& t, F&& f) {
       { std::forward<T>(t).and_then(std::forward<F>(f))} -> either;
     };
@@ -333,6 +338,11 @@ namespace harmony {
 
     constexpr operator T&&() && noexcept requires (not has_reference) {
       return std::move(m_monad);
+    }
+
+    template<detail::map_reusable<M> F>
+    constexpr auto map(F&& f) && noexcept(noexcept(std::move(m_monad).map(std::forward<F>(f)))) {
+      return std::move(m_monad).map(std::forward<F>(f));
     }
 
     template<detail::and_then_reusable<M> F>
@@ -491,6 +501,13 @@ namespace harmony::detail {
 
     [[no_unique_address]] F fmap;
 
+    template<unwrappable M>
+      requires detail::map_reusable<M, F&> and
+               not_void_resulted<F, traits::unwrap_t<M>>
+    friend constexpr specialization_of<monas> auto operator|(M&& m, map_impl self) noexcept(noexcept(std::forward<M>(m).map(self.fmap))) {
+      return monas(std::forward<M>(m).map(self.fmap));
+    }
+
     template<bool monadic_return, typename T>
     constexpr auto invoke_impl(T&& v) {
       if constexpr (monadic_return) {
@@ -509,7 +526,8 @@ namespace harmony::detail {
     }
 
     template<either M>
-      requires not_void_resulted<F, traits::unwrap_t<M>> and
+      requires (not detail::map_reusable<M, F&>) and
+               not_void_resulted<F, traits::unwrap_t<M>> and
                either<std::remove_reference_t<std::invoke_result_t<F, traits::unwrap_t<M>>>>
     friend constexpr specialization_of<monas> auto operator|(M&& m, map_impl self) {
       using result_t = std::remove_cv_t<std::invoke_result_t<F, traits::unwrap_t<M>>>;
@@ -522,7 +540,7 @@ namespace harmony::detail {
           // nullptr -> nulloptへの無効値の変換（利便性のための特殊対応）
           return monas<result_t>(std::nullopt);
         } else {
-          static_assert(std::constructible_from<traits::unwrap_other_t<M>, result_t>, "Cannot convert left value type");
+          static_assert(std::constructible_from<result_t, traits::unwrap_other_t<M>>, "Cannot convert left value type");
           // その他デフォルト、そのまま構築を試みる
           return monas<result_t>(cpo::unwrap_other(std::forward<M>(m)));
         }
@@ -530,7 +548,8 @@ namespace harmony::detail {
     }
     
     template<either M>
-      requires not_void_resulted<F, traits::unwrap_t<M>> and
+      requires (not detail::map_reusable<M, F&>) and
+               not_void_resulted<F, traits::unwrap_t<M>> and
                (not either<std::remove_reference_t<std::invoke_result_t<F, traits::unwrap_t<M>>>>)
     friend constexpr specialization_of<monas> auto operator|(M&& m, map_impl self) {
       // 有効値の型
