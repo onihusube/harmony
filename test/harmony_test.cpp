@@ -379,6 +379,53 @@ int main() {
     }
   };
 
+  "map_err test"_test = [] {
+    using namespace harmony::monadic_op;
+    {
+      int n = 10;
+
+      auto r = harmony::monas(&n) 
+        | [](int n) { return n + n; }
+        | [](int n) { return n + 100; }
+        | map_err([](std::nullptr_t) {assert(false); return nullptr; })
+        | map([](int) { return std::optional<int>{};})
+        | map_err([](std::nullopt_t) { return false;})
+        | map([](int v) { assert(false); return v; });
+
+      !ut::expect(not harmony::validate(r));
+      ut::expect(harmony::unwrap_other(r) == false);
+    } 
+    {
+      auto r = harmony::monas(std::optional<int>{10}) 
+        | [](int n) { return n + n; }
+        | [](int) { return std::nullopt; }
+        | map_err([](std::nullopt_t) { return nullptr;})
+        | map_err([](std::nullptr_t) { return false;})
+        | map([](int n) { assert(false); return n; })
+        | map_err([](bool b) { return std::optional{b};})
+        | map_err([](std::nullopt_t) { assert(false); return std::optional<bool>{true};});
+
+      !ut::expect(harmony::validate(r));
+      ut::expect(harmony::unwrap(r) == false);
+    }
+    {
+      using namespace std::string_view_literals;
+      tl::expected<int, std::string> ex{10};
+      !ut::expect(harmony::detail::map_err_reusable<tl::expected<int, std::string>, decltype([](std::string str) { return str;})>);
+      !ut::expect(harmony::detail::map_err_reusable<harmony::monas<tl::expected<int, std::string>&>, decltype([](std::string str) { return str;})>);
+      /*
+      auto r = harmony::monas(ex)
+        | [](int n) { return 2*n; }
+        | [](int) { return tl::expected<int, std::string>{tl::unexpect, "fail test"sv};}
+        | map_err([](std::string str) { return str.append(" map_err"), str;})
+        | map_err([](std::string str) { return str == "fail test map_err"sv;})
+        | map([](int n) { assert(false); return n;});
+
+      !ut::expect(not harmony::validate(r));
+      ut::expect(harmony::unwrap(r) == true); //*/
+    }
+  };
+
   "and_then test"_test = []() {
     using namespace harmony::monadic_op;
 

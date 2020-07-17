@@ -278,6 +278,15 @@ namespace harmony {
     };
 
     template<typename F, typename T>
+    concept map_err_reusable = 
+      requires(T&& t, F&& f) {
+        { std::forward<T>(t).map_err(std::forward<F>(f)) } -> either;
+      } or 
+      requires(T&& t, F&& f) {
+        { std::forward<T>(t).map_error(std::forward<F>(f)) } -> either;
+      };
+
+    template<typename F, typename T>
     concept and_then_reusable = requires(T&& t, F&& f) {
       { std::forward<T>(t).and_then(std::forward<F>(f))} -> either;
     };
@@ -343,6 +352,15 @@ namespace harmony {
     template<detail::map_reusable<M> F>
     constexpr auto map(F&& f) && noexcept(noexcept(std::move(m_monad).map(std::forward<F>(f)))) {
       return std::move(m_monad).map(std::forward<F>(f));
+    }
+
+    template<detail::map_err_reusable<M> F>
+    constexpr auto map_err(F&& f) & noexcept(noexcept(std::move(m_monad).map(std::forward<F>(f)))) {
+      if constexpr (requires{ std::move(m_monad).map_err(std::forward<F>(f)); }) {
+        return std::move(m_monad).map_err(std::forward<F>(f));
+      } else {
+        return std::move(m_monad).map_error(std::forward<F>(f));
+      }
     }
 
     template<detail::and_then_reusable<M> F>
@@ -580,6 +598,80 @@ namespace harmony::inline monadic_op {
 
 } // namespace harmony::inline monadic_op
 
+
+namespace harmony::detail {
+
+  template<typename F, typename M>
+  consteval bool check_nothrow_reuse_map_err() {
+    if constexpr (requires{std::declval<M>().map_err(std::declval<F>());}) {
+      return noexcept(std::declval<M>().map_err(std::declval<F>()));
+    } else {
+      return noexcept(std::declval<M>().map_error(std::declval<F>()));
+    }
+  }
+
+
+  template<typename F>
+  struct map_err_impl {
+
+    [[no_unique_address]] F fmap;
+
+    template<either M>
+      requires map_err_reusable<M, F&> and
+               not_void_resulted<F, traits::unwrap_other_t<M>>
+    friend constexpr specialization_of<monas> auto operator|(M&& m, map_err_impl self) noexcept(check_nothrow_reuse_map_err<F&, M>()) {
+      if constexpr (requires{std::forward<M>(m).map_err(self.fmap);}) {
+        return std::forward<M>(m).map_err(self.fmap);
+      } else {
+        return std::forward<M>(m).map_error(self.fmap);
+      }
+    }
+
+    template<either M>
+      requires (not detail::map_err_reusable<M, F&>) and
+               not_void_resulted<F, traits::unwrap_other_t<M>> and
+               either<std::remove_reference_t<std::invoke_result_t<F, traits::unwrap_other_t<M>>>>
+    friend constexpr specialization_of<monas> auto operator|(M&& m, map_err_impl self) {
+      using result_t = std::remove_cv_t<std::invoke_result_t<F, traits::unwrap_other_t<M>>>;
+
+      if (cpo::validate(m)) {
+        static_assert(std::constructible_from<result_t, traits::unwrap_t<M>>, "Cannot convert right value type");
+        // そのまま構築を試みる
+        return monas<result_t>(cpo::unwrap(std::forward<M>(m)));
+      } else {
+        return monas<result_t>(self.fmap(cpo::unwrap_other(std::forward<M>(m))));
+      }
+    }
+    
+    template<either M>
+      requires (not detail::map_err_reusable<M, F&>) and
+               not_void_resulted<F, traits::unwrap_other_t<M>> and
+               (not either<std::remove_reference_t<std::invoke_result_t<F, traits::unwrap_other_t<M>>>>)
+    friend constexpr specialization_of<monas> auto operator|(M&& m, map_err_impl self) {
+      // 有効値の型
+      using R = std::remove_cvref_t<traits::unwrap_t<M>>;
+      // 無効値の型
+      using L = std::remove_cvref_t<std::invoke_result_t<F, traits::unwrap_other_t<M>>>;
+      
+      if (cpo::validate(m)) {
+        return monas(sachet<L, R>{ .value = std::variant<L, R>(std::in_place_index<1>, cpo::unwrap(std::forward<M>(m))) });
+      } else {
+        return monas(sachet<L, R>{ .value = std::variant<L, R>(std::in_place_index<0>, self.fmap(cpo::unwrap_other(std::forward<M>(m)))) });
+      }
+    }
+
+  };
+} // namespace harmony::detail
+
+namespace harmony::inline monadic_op {
+
+  inline constexpr auto map_err = []<typename F>(F&& f) noexcept(std::is_nothrow_move_constructible_v<F>) -> detail::map_err_impl<F> {
+    return detail::map_err_impl{ .fmap = std::forward<F>(f) };
+  };
+
+} // namespace harmony::inline monadic_op
+
+
 namespace harmony::detail {
 
   template<typename F, typename M, typename R = std::remove_reference_t<std::invoke_result_t<F, traits::unwrap_t<M>>>>
@@ -629,6 +721,7 @@ namespace harmony::inline monadic_op {
     return detail::and_then_impl{ .fmap = std::forward<F>(f) };
   };
 }
+
 
 namespace harmony::detail {
 
