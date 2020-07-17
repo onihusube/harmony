@@ -1,4 +1,4 @@
-project('harmony', 'cpp', default_options : ['warning_level=3', 'cpp_debugstl=true'], meson_version : '>=0.50.0')
+project('harmony', 'cpp', default_options : ['warning_level=3', 'werror=true', 'cpp_debugstl=true'], meson_version : '>=0.50.0')
 
 #コンパイルオプション調整
 cppcompiler = meson.get_compiler('cpp').get_argument_syntax()
