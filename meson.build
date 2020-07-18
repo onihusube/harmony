@@ -21,7 +21,8 @@ boostut_dep = boostut_proj.get_variable('boostut_dep')
 tlexpected_proj = subproject('expected')
 tlexpected_dep = tlexpected_proj.get_variable('tlexpected_dep')
 
-executable('harmony_test', 'test/harmony_test.cpp', include_directories : include_dir, extra_files : vs_files, cpp_args : options, dependencies : [boostut_dep, tlexpected_dep])
+exe = executable('harmony_test', 'test/harmony_test.cpp', include_directories : include_dir, extra_files : vs_files, cpp_args : options, dependencies : [boostut_dep, tlexpected_dep])
+test('harmony test', exe)
 
 # meson用依存オブジェクト
 harmony_dep = declare_dependency(include_directories : include_directories('include'))
