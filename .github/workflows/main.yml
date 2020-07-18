@@ -6,5 +6,4 @@ jobs:
     name: run test
     steps:
     - name: Hello world action step
-      id: hello
-      uses: onihusube/harmony@v1
+      uses: onihusube/gcc-meson-docker-action@v1
