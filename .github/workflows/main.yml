@@ -1,3 +1,4 @@
+name: Test by GCC latest
 on: [push, pull_request]
 
 jobs:
