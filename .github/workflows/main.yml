@@ -6,4 +6,4 @@ jobs:
     name: run test
     steps:
     - name: Hello world action step
-      uses: onihusube/gcc-meson-docker-action@v2
+      uses: onihusube/gcc-meson-docker-action@v3
