@@ -1,4 +1,4 @@
-![.github/workflows/main.yml](https://github.com/onihusube/harmony/workflows/.github/workflows/main.yml/badge.svg)
+![Test by GCC latest](https://github.com/onihusube/harmony/workflows/Test%20by%20GCC%20latest/badge.svg)
 
 # harmony
 
