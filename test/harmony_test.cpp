@@ -409,11 +409,12 @@ int main() {
       ut::expect(harmony::unwrap(r) == false);
     }
     {
+      /*
       using namespace std::string_view_literals;
       tl::expected<int, std::string> ex{10};
       !ut::expect(harmony::detail::map_err_reusable<tl::expected<int, std::string>, decltype([](std::string str) { return str;})>);
       !ut::expect(harmony::detail::map_err_reusable<harmony::monas<tl::expected<int, std::string>&>, decltype([](std::string str) { return str;})>);
-      /*
+      ///*
       auto r = harmony::monas(ex)
         | [](int n) { return 2*n; }
         | [](int) { return tl::expected<int, std::string>{tl::unexpect, "fail test"sv};}
