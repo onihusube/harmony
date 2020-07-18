@@ -1,5 +1,4 @@
 name: 'build & test'
-on: [push, pull_request]
 
 inputs:
     test-entry:
