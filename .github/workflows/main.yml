@@ -7,4 +7,4 @@ jobs:
     steps:
     - name: Hello world action step
       id: hello
-      uses: onihusube/harmony@v1
+      uses: onihusube/harmony
