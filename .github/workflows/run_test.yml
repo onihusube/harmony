@@ -1,15 +1,5 @@
 name: 'build & test'
 
-inputs:
-    test-entry:
-        description: 'meson build & run test'
-        required: true
-outputs:
-    test-result:
-        description: 'boost.ut & meson test report'
-
 runs:
     using: 'docker'
     image: 'Dockerfile'
-    args:
-        - ${{ inputs.test-entry }}
