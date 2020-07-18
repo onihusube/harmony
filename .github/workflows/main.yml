@@ -6,7 +6,7 @@ jobs:
     name: run test
     steps:
     - name: run test in docker
-      uses: onihusube/gcc-meson-docker-action@test6
+      uses: onihusube/gcc-meson-docker-action@v5
       with:
         name: 'harmony'
         uri: 'https://github.com/onihusube/harmony.git'
