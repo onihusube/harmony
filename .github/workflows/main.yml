@@ -6,4 +6,4 @@ jobs:
     name: run test
     steps:
     - name: run test in docker
-      uses: onihusube/gcc-meson-docker-action@test4
+      uses: onihusube/gcc-meson-docker-action@v4
