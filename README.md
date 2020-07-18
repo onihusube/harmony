@@ -1,3 +1,5 @@
+![.github/workflows/main.yml](https://github.com/onihusube/harmony/workflows/.github/workflows/main.yml/badge.svg)
+
 # harmony
 
 "harmony" is a header only library for working with monad in the C++ world.
