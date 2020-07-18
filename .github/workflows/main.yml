@@ -5,5 +5,5 @@ jobs:
     runs-on: ubuntu-latest
     name: run test
     steps:
-    - name: Hello world action step
-      uses: onihusube/gcc-meson-docker-action@test1
+    - name: run test in docker
+      uses: onihusube/gcc-meson-docker-action@test2
