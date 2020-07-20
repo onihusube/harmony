@@ -10,7 +10,10 @@ namespace harmony::inline concepts {
 
   template<typename T>
   using with_reference = T&;
-  
+
+  /**
+  * @brief 型Tがvoidではない
+  */
   template<typename T>
   concept not_void = requires {
     typename with_reference<T>;
@@ -37,7 +40,10 @@ namespace harmony::inline concepts {
 }
 
 namespace harmony::detail {
-  
+
+  /**
+  * @brief unwrap CPOの実装
+  */
   struct unwrap_impl {
 
     template<weakly_indirectly_readable T>
@@ -74,18 +80,27 @@ namespace harmony::detail {
 } // harmony::detail
 
 namespace harmony::inline cpo {
-  
+
+  /**
+  * @brief unwrap(a)のように呼び出し、任意の型の内包する値を取り出すカスタマイゼーションポイントオブジェクト
+  */
   inline constexpr detail::unwrap_impl unwrap{};
   
 }
 
 namespace harmony::inline concepts {
 
+  /**
+  * @brief モナド的とみなせる型である
+  */
   template<typename T>
   concept unwrappable = requires(T&& m) {
     { harmony::cpo::unwrap(std::forward<T>(m)) } -> not_void;
   };
 
+  /**
+  * @brief bool型への明示的変換が可能
+  */
   template<typename T>
   concept boolean_convertible = requires(const T& t) {
     bool(t);
@@ -94,6 +109,9 @@ namespace harmony::inline concepts {
 
 namespace harmony::detail {
 
+  /**
+  * @brief validate CPOの実装
+  */
   struct validate_impl {
 
     template<unwrappable T>
@@ -133,12 +151,18 @@ namespace harmony::detail {
 
 namespace harmony::inline cpo {
 
+  /**
+  * @brief validate(a)のように呼び出し、モナド的な型が値を内包しているかをbool値で得るカスタマイゼーションポイントオブジェクト
+  */
   inline constexpr detail::validate_impl validate{};
   
 }
 
 namespace harmony::inline concepts {
 
+  /**
+  * @brief meybeモナドである
+  */
   template<typename T>
   concept maybe =
     unwrappable<T> and
@@ -146,6 +170,9 @@ namespace harmony::inline concepts {
       { harmony::cpo::validate(m) } -> std::same_as<bool>;
     };
   
+  /**
+  * @brief listモナドである
+  */
   template<typename T>
   concept list = maybe<T> and std::ranges::range<T>;
 
@@ -153,12 +180,19 @@ namespace harmony::inline concepts {
 
 namespace harmony::traits {
 
+  /**
+  * @brief unwrap(a)の結果の型を得る
+  * @tparam T unwrappableな型
+  */
   template<typename T>
   using unwrap_t = decltype(harmony::cpo::unwrap(std::declval<T>()));
 }
 
 namespace harmony::detail {
 
+  /**
+  * @brief unit CPOの実装
+  */
   struct unit_impl {
 
     template<unwrappable M, typename T>
@@ -180,11 +214,17 @@ namespace harmony::detail {
 
 namespace harmony::inline cpo {
 
+  /**
+  * @brief unit(a, r)のように呼び出し、rをモナドaへ再代入する（unitあるいはreturnと呼ばれる操作に対応する）
+  */
   inline constexpr detail::unit_impl unit{};
 }
 
 namespace harmony::inline concepts {
 
+  /**
+  * @brief モナド的な型MはTの値を再代入可能である
+  */
   template<typename M, typename T>
   concept rewrappable = 
     unwrappable<M> and
@@ -192,6 +232,9 @@ namespace harmony::inline concepts {
       harmony::cpo::unit(m, std::forward<T>(v));
     };
 
+  /**
+  * @brief モナド的な型Mに対するCallbleなFの呼び出し結果は、Mに再代入可能である（一般にbindと呼ばれる操作が可能な組である）
+  */
   template<typename F, typename M>
   concept monadic = 
     std::invocable<F, traits::unwrap_t<M>> and
@@ -217,6 +260,9 @@ namespace harmony::detail {
   };
 
 
+  /**
+  * @brief unwrap_other CPOの実装
+  */
   struct unwrap_other_impl {
 
     template<typename T>
@@ -247,11 +293,18 @@ namespace harmony::detail {
 } // namespace harmony::detail
 
 namespace harmony::inline cpo {
+
+  /**
+  * @brief unwrap_other(a)のように呼び出し、任意の型の内包するもう一方の値を取り出すカスタマイゼーションポイントオブジェクト
+  */
   inline constexpr detail::unwrap_other_impl unwrap_other{};
 }
 
 namespace harmony::inline concepts {
 
+  /**
+  * @brief Eitherモナドである
+  */
   template<typename T>
   concept either = 
     maybe<T> and
@@ -262,6 +315,9 @@ namespace harmony::inline concepts {
 
 namespace harmony::traits {
 
+  /**
+  * @brief unwrap_other(a)の結果型を得る
+  */
   template<typename T>
   using unwrap_other_t = decltype(harmony::cpo::unwrap_other(std::declval<T>()));
 }
@@ -298,7 +354,11 @@ namespace harmony {
     };
   }
 
-
+  /**
+  * @brief モナド的な型をラップし統一的かつ透過的に扱いつつ、operator|によるbindサポートを追加する
+  * @tparam T 任意のモナド的な型、右辺値参照ではないこと
+  * @details 基本的には型を明示的に指定せずに、クラステンプレートの引数推論に任せて利用する（それを前提とした振る舞いをする）
+  */
   template<unwrappable T>
   class monas {
 
@@ -315,9 +375,15 @@ namespace harmony {
     
   public:
 
+    /**
+    * @brief Tが参照である場合のコンストラクタ
+    */
     constexpr monas(T& bound) noexcept requires has_reference
       : m_monad(bound) {}
 
+    /**
+    * @brief Tがprvalueである場合のコンストラクタ
+    */
     template<typename U>
       requires std::constructible_from<T, U>
     constexpr monas(U&& bound) noexcept(std::is_nothrow_constructible_v<T, U>) requires (not has_reference)
@@ -377,12 +443,22 @@ namespace harmony {
 
   public:
 
+    /**
+    * @brief bind演算子、単にunwrappableな型に対してのもの
+    * @param self monas<T>のrvalue
+    * @param f Callableオブジェクト
+    */
     template<monadic<M> F>
     friend constexpr auto operator|(monas&& self, F&& f) noexcept(detail::monadic_noexecpt_v<T, F>) -> monas<T>&& {
       cpo::unit(self.m_monad, f(*self));
       return std::move(self);
     }
-    
+
+    /**
+    * @brief bind演算子、maybeな型に対してのもの
+    * @param self monas<T>のrvalue
+    * @param f Callableオブジェクト
+    */
     template<monadic<M> F>
       requires maybe<M>
     friend constexpr auto operator|(monas&& self, F&& f) noexcept(noexcept(bool(self)) and detail::monadic_noexecpt_v<T, F>) -> monas<T>&& {
@@ -392,9 +468,15 @@ namespace harmony {
       return std::move(self);
     }
 
+    /**
+    * @brief bind演算子、listな型に対してのもの
+    * @param self monas<T>のrvalue
+    * @param f Callableオブジェクト
+    */
     template<typename F>
-      requires list<M>
-    friend constexpr auto operator|(monas&& self, F&& f) noexcept(detail::monadic_noexecpt_v<std::ranges::iterator_t<T>, F>) -> monas<T>&& requires monadic<F, std::ranges::iterator_t<T>> {
+      requires list<M> and
+               requires monadic<F, std::ranges::iterator_t<T>>
+    friend constexpr auto operator|(monas&& self, F&& f) noexcept(detail::monadic_noexecpt_v<std::ranges::iterator_t<T>, F>) -> monas<T>&& {
       auto it = std::ranges::begin(*self);
       const auto fin = std::ranges::end(*self);
 
@@ -405,6 +487,11 @@ namespace harmony {
       return std::move(self);
     }
 
+    /**
+    * @brief 左辺値monasをxvalueにする
+    * @details autoで受けるなどして左辺値に落とした場合に、再びbindを使用する場合に使う
+    * @param self monas<T>のrvalue
+    */
     [[nodiscard]]
     friend constexpr auto operator~(monas& self) noexcept -> monas<T>&& {
       return std::move(self);
@@ -450,6 +537,9 @@ namespace harmony {
     
   };
 
+  /**
+  * @brief 2引数をとるクラステンプレートをあえて1引数で使いたい場合のダミーとして嵌め込むタグ型
+  */
   struct nil{};
 
   /**
@@ -592,6 +682,11 @@ namespace harmony::detail {
 
 namespace harmony::inline monadic_op {
 
+  /**
+  * @brief モナド的な型に対してmapを適用する（有効値を任意の型の値へ写す）
+  * @brief M<T, E>のような型をM<U, E>のように変換する
+  * @param f T -> U へmapするCallableオブジェクト
+  */
   inline constexpr auto map = []<typename F>(F&& f) noexcept(std::is_nothrow_move_constructible_v<F>) -> detail::map_impl<F> {
     return detail::map_impl{ .fmap = std::forward<F>(f) };
   };
@@ -670,6 +765,11 @@ namespace harmony::detail {
 
 namespace harmony::inline monadic_op {
 
+  /**
+  * @brief Eitherモナドな型に対してmap_errを適用する（無効地を任意の型の値へ写す）
+  * @brief M<T, E>のような型をM<T, F>のように変換する（Either<L, R>をEither<M, R>へ変換する）
+  * @param f E -> F へmapするCallableオブジェクト
+  */
   inline constexpr auto map_err = []<typename F>(F&& f) noexcept(std::is_nothrow_move_constructible_v<F>) -> detail::map_err_impl<F> {
     return detail::map_err_impl{ .fmap = std::forward<F>(f) };
   };
@@ -724,6 +824,11 @@ namespace harmony::detail {
 
 namespace harmony::inline monadic_op {
 
+  /**
+  * @brief Eitherモナドな型の有効値をmapした別のEither型へ変換する（有効値だけを変換し、無効値はそのまま）
+  * @brief M<T, E>のような型をM<U, E>のように変換する（Either<L, R>をEither<L, S>へ変換する）
+  * @param f M<T, E> -> M<U, E> へmapするCallableオブジェクト（戻り値型はEitherを返さなければならない）
+  */
   inline constexpr auto and_then = []<typename F>(F&& f) noexcept(std::is_nothrow_move_constructible_v<F>) -> detail::and_then_impl<F> {
     return detail::and_then_impl{ .fmap = std::forward<F>(f) };
   };
@@ -778,6 +883,11 @@ namespace harmony::detail {
 
 namespace harmony::inline monadic_op {
 
+  /**
+  * @brief Eitherモナドな型の無効値をmapした別のEither型へ変換する（無効値だけを変換し、有効値はそのまま）
+  * @brief M<T, E>のような型をM<T, F>のように変換する（Either<L, R>をEither<M, R>へ変換する）
+  * @param f M<T, E> -> M<T, F> へmapするCallableオブジェクト（戻り値型はEitherを返さなければならない）
+  */
   inline constexpr auto or_else = []<typename F>(F&& f) noexcept(std::is_nothrow_move_constructible_v<F>) -> detail::or_else_impl<F> {
     return detail::or_else_impl{ .fmap = std::forward<F>(f) };
   };
