@@ -409,21 +409,19 @@ int main() {
       ut::expect(harmony::unwrap(r) == false);
     }
     {
-      /*
       using namespace std::string_view_literals;
+
       tl::expected<int, std::string> ex{10};
-      !ut::expect(harmony::detail::map_err_reusable<tl::expected<int, std::string>, decltype([](std::string str) { return str;})>);
-      !ut::expect(harmony::detail::map_err_reusable<harmony::monas<tl::expected<int, std::string>&>, decltype([](std::string str) { return str;})>);
 
       auto r = harmony::monas(ex)
         | [](int n) { return 2*n; }
-        | [](int) { return tl::expected<int, std::string>{tl::unexpect, "fail test"sv};}
+        | [](int) { return tl::expected<int, std::string>{tl::unexpect, "fail test"};}
         | map_err([](std::string str) { return str.append(" map_err"), str;})
         | map_err([](std::string str) { return str == "fail test map_err"sv;})
         | map([](int n) { assert(false); return n;});
 
       !ut::expect(not harmony::validate(r));
-      ut::expect(harmony::unwrap(r) == true); //*/
+      ut::expect(harmony::unwrap_other(r) == true);
     }
   };
 
@@ -506,6 +504,90 @@ int main() {
 
       !ut::expect(harmony::validate(r2));
       20_i == harmony::unwrap(r2);
+    }
+  };
+
+  "match test"_test = [] {
+    using namespace harmony::monadic_op;
+
+    {
+      int n = 10;
+
+      int r = harmony::monas(&n)
+        | match([](int n){ return 2*n;}, [](std::nullptr_t) { assert(false); return 0;});
+
+      20_i == r;
+
+      int *p = nullptr;
+
+      r = harmony::monas(p)
+        | match([](int){ assert(false); return 0;}, [](std::nullptr_t) { return 1;});
+      
+      1_i == r;
+    }
+    {
+      int r = harmony::monas(std::optional<int>{10})
+        | match([](int n){ return 2*n;}, [](std::nullopt_t) { assert(false); return 0;});
+
+      20_i == r;
+
+      r = harmony::monas(std::optional<int>{})
+        | match([](int){ assert(false); return 0;}, [](std::nullopt_t) { return 1;});
+      
+      1_i == r;
+    }
+    {
+      using namespace std::string_view_literals;
+
+      tl::expected<double, int> ex{3.14};
+
+      // 戻り値のstringはモナド的な型と見なされるのでmonasでラップされてる（ここでは明示的な暗黙変換により取り出している）
+      std::string str = ex | match([](double d) { return std::to_string(d); }, [](int n) { return std::to_string(n); });
+
+      ut::expect(str == "3.140000"sv);
+
+      tl::expected<double, int> ex2{tl::unexpect, 3};
+      std::string str2 = ex2 | match([](double d) { return std::to_string(d); }, [](int n) { return std::to_string(-n); });
+      ut::expect(str2 == "-3"sv);
+    }
+    // 結果が再びモナド的な型となるmatch
+    {
+      int n = 10;
+
+      auto suc = harmony::monas(&n)
+        | match([](int n){ return std::optional<int>{2*n};}, [](std::nullptr_t) { return std::nullopt;})
+        | [](int n) { return n + n;}
+        | map([](int n) { return double(n);});
+
+      !ut::expect(harmony::validate(suc));
+      40.0_d == harmony::unwrap(suc);
+
+      int *p = nullptr;
+
+      auto fail = harmony::monas(p)
+        | match([](int n){ return std::optional<int>{2*n};}, [](std::nullptr_t) { return std::nullopt;})
+        | [](int n) {return n + 10;}
+        | map_err([](std::nullopt_t) { return -1; });
+
+      !ut::expect(not harmony::validate(fail));
+      -1_i == harmony::unwrap_other(fail);
+    }
+    // 結果がvoidとなるmatch
+    {
+      int n = 10;
+
+      int r = 0;
+      harmony::monas(&n)
+        | match([&r](int n){ r = n;}, [](std::nullptr_t) { assert(false);});
+
+      10_i == r;
+
+      int *p = nullptr;
+
+      harmony::monas(p)
+        | match([](int){ assert(false);}, [&r](std::nullptr_t) { r = -1; });
+      
+      -1_i == r;
     }
   };
 }

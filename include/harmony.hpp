@@ -278,13 +278,14 @@ namespace harmony {
     };
 
     template<typename F, typename T>
-    concept map_err_reusable = 
-      requires(T&& t, F&& f) {
-        { std::forward<T>(t).map_err(std::forward<F>(f)) } -> either;
-      } or 
-      requires(T&& t, F&& f) {
-        { std::forward<T>(t).map_error(std::forward<F>(f)) } -> either;
-      };
+    concept map_err_reusable = requires(T&& t, F&& f) {
+      { std::forward<T>(t).map_err(std::forward<F>(f)) } -> either;
+    };
+
+    template<typename F, typename T>
+    concept map_error_reusable = requires(T&& t, F&& f) {
+      { std::forward<T>(t).map_error(std::forward<F>(f)) } -> either;
+    };
 
     template<typename F, typename T>
     concept and_then_reusable = requires(T&& t, F&& f) {
@@ -355,12 +356,13 @@ namespace harmony {
     }
 
     template<detail::map_err_reusable<M> F>
-    constexpr auto map_err(F&& f) & noexcept(noexcept(std::move(m_monad).map(std::forward<F>(f)))) {
-      if constexpr (requires{ std::move(m_monad).map_err(std::forward<F>(f)); }) {
-        return std::move(m_monad).map_err(std::forward<F>(f));
-      } else {
-        return std::move(m_monad).map_error(std::forward<F>(f));
-      }
+    constexpr auto map_err(F&& f) && noexcept(noexcept(std::move(m_monad).map_err(std::forward<F>(f)))) requires either<M> {
+      return std::move(m_monad).map_err(std::forward<F>(f));
+    }
+
+    template<detail::map_error_reusable<M> F>
+    constexpr auto map_err(F&& f) && noexcept(noexcept(std::move(m_monad).map_error(std::forward<F>(f)))) requires either<M> {
+      return std::move(m_monad).map_error(std::forward<F>(f));
     }
 
     template<detail::and_then_reusable<M> F>
@@ -603,12 +605,15 @@ namespace harmony::detail {
 
   template<typename F, typename M>
   consteval bool check_nothrow_reuse_map_err() {
-    if constexpr (requires{std::declval<M>().map_err(std::declval<F>());}) {
+    if constexpr (detail::map_err_reusable<F, M>) {
       return noexcept(std::declval<M>().map_err(std::declval<F>()));
     } else {
       return noexcept(std::declval<M>().map_error(std::declval<F>()));
     }
   }
+
+  template<typename F, typename M>
+  concept map_err_func_reusable = map_err_reusable<F, M> or map_error_reusable<F, M>;
 
 
   template<typename F>
@@ -617,18 +622,18 @@ namespace harmony::detail {
     [[no_unique_address]] F fmap;
 
     template<either M>
-      requires map_err_reusable<M, F&> and
+      requires map_err_func_reusable<F&, M> and
                not_void_resulted<F, traits::unwrap_other_t<M>>
     friend constexpr specialization_of<monas> auto operator|(M&& m, map_err_impl self) noexcept(check_nothrow_reuse_map_err<F&, M>()) {
-      if constexpr (requires{std::forward<M>(m).map_err(self.fmap);}) {
-        return std::forward<M>(m).map_err(self.fmap);
+      if constexpr (map_err_reusable<F, M>) {
+        return monas(std::forward<M>(m).map_err(self.fmap));
       } else {
-        return std::forward<M>(m).map_error(self.fmap);
+        return monas(std::forward<M>(m).map_error(self.fmap));
       }
     }
 
     template<either M>
-      requires (not detail::map_err_reusable<M, F&>) and
+      requires (not map_err_func_reusable<F&, M>) and
                not_void_resulted<F, traits::unwrap_other_t<M>> and
                either<std::remove_reference_t<std::invoke_result_t<F, traits::unwrap_other_t<M>>>>
     friend constexpr specialization_of<monas> auto operator|(M&& m, map_err_impl self) {
@@ -644,7 +649,7 @@ namespace harmony::detail {
     }
     
     template<either M>
-      requires (not detail::map_err_reusable<M, F&>) and
+      requires (not map_err_func_reusable<F&, M>) and
                not_void_resulted<F, traits::unwrap_other_t<M>> and
                (not either<std::remove_reference_t<std::invoke_result_t<F, traits::unwrap_other_t<M>>>>)
     friend constexpr specialization_of<monas> auto operator|(M&& m, map_err_impl self) {
@@ -695,12 +700,14 @@ namespace harmony::detail {
     friend constexpr specialization_of<monas> auto operator|(M&& m, and_then_impl self) noexcept(noexcept(cpo::validate(m)) and check_nothrow_and_then_v<F, M>) {
       // 呼び出し結果が左辺値参照を返すとき、コピーされることになる
       // mが有効値を保持していないとき、戻り値のmonasはmの無効値をムーブするしかない（参照するのは危険）
-      using ret_either_t = std::remove_reference_t<decltype(self.fmap(cpo::unwrap(std::forward<M>(m))))>;
+      //using ret_either_t = std::remove_reference_t<decltype(self.fmap(cpo::unwrap(std::forward<M>(m))))>;
+      using result_t = std::remove_cvref_t<std::invoke_result_t<F&, traits::unwrap_t<M>>>;
 
       if (cpo::validate(m)) {
-        return monas<ret_either_t>(self.fmap(cpo::unwrap(std::forward<M>(m))));
+        return monas<result_t>(self.fmap(cpo::unwrap(std::forward<M>(m))));
       } else {
-        return monas<ret_either_t>(cpo::unwrap_other(std::forward<M>(m)));
+        static_assert(std::constructible_from<result_t, traits::unwrap_other_t<M>>, "Cannot convert left value type");
+        return monas<result_t>(cpo::unwrap_other(std::forward<M>(m)));
       }
     }
 
@@ -745,12 +752,14 @@ namespace harmony::detail {
     friend constexpr specialization_of<monas> auto operator|(M&& m, or_else_impl self) noexcept(noexcept(cpo::validate(m)) and check_nothrow_or_else_v<F, M>) {
       // 呼び出し結果が左辺値参照を返すとき、コピーされることになる
       // mが有効値を保持しているとき、戻り値のmonasはmの有効値をムーブするしかない（参照するのは危険）
-      using ret_either_t = std::remove_reference_t<decltype(self.fmap(cpo::unwrap_other(std::forward<M>(m))))>;
+      //using ret_either_t = std::remove_reference_t<decltype(self.fmap(cpo::unwrap_other(std::forward<M>(m))))>;
+      using result_t = std::remove_cvref_t<std::invoke_result_t<F &, traits::unwrap_other_t<M>>>;
 
       if (cpo::validate(m)) {
-        return monas<ret_either_t>(cpo::unwrap(std::forward<M>(m)));
+        static_assert(std::constructible_from<result_t, traits::unwrap_t<M>>, "Cannot convert right value type");
+        return monas<result_t>(cpo::unwrap(std::forward<M>(m)));
       } else {
-        return monas<ret_either_t>(self.fmap(cpo::unwrap_other(std::forward<M>(m))));
+        return monas<result_t>(self.fmap(cpo::unwrap_other(std::forward<M>(m))));
       }
     }
 
@@ -773,6 +782,52 @@ namespace harmony::inline monadic_op {
     return detail::or_else_impl{ .fmap = std::forward<F>(f) };
   };
 }
+
+namespace harmony::detail {
+
+  template<typename Fok, typename Ferr>
+  struct match_impl {
+    [[no_unique_address]] Fok  fmap_ok;
+    [[no_unique_address]] Ferr fmap_err;
+
+
+    template<either M>
+      requires std::invocable<Fok, traits::unwrap_t<M>> and
+               std::invocable<Ferr, traits::unwrap_other_t<M>> and
+               std::common_with<std::invoke_result_t<Fok, traits::unwrap_t<M>>, std::invoke_result_t<Ferr, traits::unwrap_other_t<M>>>
+    friend constexpr auto operator|(M&& m, match_impl self) {
+      using result_t = std::common_type_t<std::invoke_result_t<Fok, traits::unwrap_t<M>>, std::invoke_result_t<Ferr, traits::unwrap_other_t<M>>>;
+
+      if constexpr (unwrappable<result_t>) {
+        if (cpo::validate(m)) {
+          return monas<result_t>(self.fmap_ok(cpo::unwrap(std::forward<M>(m))));
+        } else {
+          return monas<result_t>(self.fmap_err(cpo::unwrap_other(std::forward<M>(m))));
+        }
+      } else {
+        if (cpo::validate(m)) {
+          return static_cast<result_t>(self.fmap_ok(cpo::unwrap(std::forward<M>(m))));
+        } else {
+          return static_cast<result_t>(self.fmap_err(cpo::unwrap_other(std::forward<M>(m))));
+        }
+      }
+    }
+  };
+
+  template<typename Fok, typename Ferr>
+  match_impl(Fok&&, Ferr&&) -> match_impl<Fok, Ferr>;
+
+} // namespace harmony::detail
+
+namespace harmony::inline monadic_op {
+
+  inline constexpr auto match = []<typename Fok, typename Ferr>(Fok&& fok, Ferr&& ferr) noexcept(std::is_nothrow_move_constructible_v<Fok> and std::is_nothrow_move_constructible_v<Ferr>) -> detail::match_impl<Fok, Ferr> {
+    return detail::match_impl{ .fmap_ok = std::forward<Fok>(fok), .fmap_err = std::forward<Ferr>(ferr) };
+  };
+
+  inline constexpr auto &fold = match;
+
+} // namespace harmony::inline monadic_op
 
 namespace harmony::detail {
 
