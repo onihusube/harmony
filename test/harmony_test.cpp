@@ -554,15 +554,14 @@ int main() {
     {
       using namespace std::string_view_literals;
 
-      tl::expected<double, int> ex{3.14};
-
-      // 戻り値のstringはモナド的な型と見なされるのでmonasでラップされてる（ここでは明示的な暗黙変換により取り出している）
-      std::string str = ex | match([](auto v) { return std::to_string(v); });
+      std::string str = tl::expected<double, int>{3.14}
+        | match([](auto v) { return std::to_string(v); });
 
       ut::expect(str == "3.140000"sv);
 
-      tl::expected<double, int> ex2{tl::unexpect, 3};
-      std::string str2 = ex2 | fold([](auto v) { return std::to_string(v); });
+      std::string str2 = tl::expected<double, int>{tl::unexpect, 3}
+        | fold([](auto v) { return std::to_string(v); });
+
       ut::expect(str2 == "3"sv);
     }
     // 結果が再びモナド的な型となるmatch
@@ -603,6 +602,45 @@ int main() {
         | match([](int){ assert(false);}, [&r](std::nullptr_t) { r = -1; });
       
       -1_i == r;
+    }
+  };
+
+  "exists test"_test = [] {
+    using namespace harmony::monadic_op;
+
+    {
+      int n = 10;
+
+      bool r = harmony::monas(&n)
+        | [](int n) { return n + n; }
+        | exists([](int n) { return n == 20;});
+
+      ut::expect(r == true);
+
+      r = harmony::monas(&n)
+        | exists([](int n) { return n == 10;});
+
+      ut::expect(r == false);
+
+      int *p = nullptr;
+
+      r = harmony::monas(p)
+        | [](int n) { return n + n; }
+        | exists([](int n) { return n == 0;});
+
+      ut::expect(r == false);
+    }
+    //シーケンスに対するexists
+    {
+      std::vector<int> vec = {2, 4, 6, 8, 10};
+
+      bool r = vec | exists([](int n) { return n == 8; });
+
+      ut::expect(r == true);
+
+      r = vec | exists([](int n) { return n % 2 == 1; });
+
+      ut::expect(r == false);
     }
   };
 }

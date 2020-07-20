@@ -790,6 +790,24 @@ namespace harmony::detail {
     [[no_unique_address]] Fok  fmap_ok;
     [[no_unique_address]] Ferr fmap_err;
 
+    template<typename R, typename M, typename Fe>
+    constexpr auto invoke_impl(M&& m, Fe& ferr) {
+      if constexpr (unwrappable<R>) {
+        if (cpo::validate(m)) {
+          return monas<R>(this->fmap_ok(cpo::unwrap(std::forward<M>(m))));
+        } else {
+          return monas<R>(ferr(cpo::unwrap_other(std::forward<M>(m))));
+        }
+      } else {
+        // なぜかR=voidの時もこのまま動くらしい（本当にポータブル？）
+        if (cpo::validate(m)) {
+          return static_cast<R>(this->fmap_ok(cpo::unwrap(std::forward<M>(m))));
+        } else {
+          return static_cast<R>(ferr(cpo::unwrap_other(std::forward<M>(m))));
+        }
+      }
+    }
+
 
     template<either M>
       requires std::invocable<Fok, traits::unwrap_t<M>> and
@@ -798,19 +816,7 @@ namespace harmony::detail {
     friend constexpr auto operator|(M&& m, match_impl self) {
       using result_t = std::common_type_t<std::invoke_result_t<Fok, traits::unwrap_t<M>>, std::invoke_result_t<Ferr, traits::unwrap_other_t<M>>>;
 
-      if constexpr (unwrappable<result_t>) {
-        if (cpo::validate(m)) {
-          return monas<result_t>(self.fmap_ok(cpo::unwrap(std::forward<M>(m))));
-        } else {
-          return monas<result_t>(self.fmap_err(cpo::unwrap_other(std::forward<M>(m))));
-        }
-      } else {
-        if (cpo::validate(m)) {
-          return static_cast<result_t>(self.fmap_ok(cpo::unwrap(std::forward<M>(m))));
-        } else {
-          return static_cast<result_t>(self.fmap_err(cpo::unwrap_other(std::forward<M>(m))));
-        }
-      }
+      return self.invoke_impl<result_t>(std::forward<M>(m), self.fmap_err);
     }
 
     template<either M>
@@ -821,22 +827,8 @@ namespace harmony::detail {
     friend constexpr auto operator|(M&& m, match_impl self) {
       using result_t = std::common_type_t<std::invoke_result_t<Fok, traits::unwrap_t<M>>, std::invoke_result_t<Fok, traits::unwrap_other_t<M>>>;
 
-      if constexpr (unwrappable<result_t>) {
-        if (cpo::validate(m)) {
-          return monas<result_t>(self.fmap_ok(cpo::unwrap(std::forward<M>(m))));
-        } else {
-          return monas<result_t>(self.fmap_ok(cpo::unwrap_other(std::forward<M>(m))));
-        }
-      } else {
-        if (cpo::validate(m)) {
-          return static_cast<result_t>(self.fmap_ok(cpo::unwrap(std::forward<M>(m))));
-        } else {
-          return static_cast<result_t>(self.fmap_ok(cpo::unwrap_other(std::forward<M>(m))));
-        }
-      }
+      return self.invoke_impl<result_t>(std::forward<M>(m), self.fmap_ok);
     }
-
-
   };
 
   template<typename Fok, typename Ferr>
@@ -853,6 +845,47 @@ namespace harmony::inline monadic_op {
   inline constexpr auto &fold = match;
 
 } // namespace harmony::inline monadic_op
+
+namespace harmony::detail {
+
+  template<typename Pred>
+  struct exists_impl {
+    [[no_unique_address]] Pred f_pred;
+
+    template<maybe M>
+      requires std::predicate<Pred, traits::unwrap_t<M>>
+    friend constexpr bool operator|(M&& m, exists_impl self) noexcept(noexcept(cpo::validate(m)) and noexcept(self.f_pred(cpo::unwrap(m)))) {
+      if (cpo::validate(m)) {
+        return self.f_pred(cpo::unwrap(m));
+      }
+      return false;
+    }
+
+    template<list M>
+      requires std::predicate<Pred, std::ranges::range_reference_t<M>>
+    friend constexpr bool operator|(M&& m, exists_impl self) noexcept(noexcept(std::is_nothrow_invocable_r_v<bool, Pred, std::ranges::range_reference_t<M>>)) {
+      auto it = std::ranges::begin(m);
+      const auto fin = std::ranges::end(m);
+
+      for (; it != fin; ++it) {
+        if (self.f_pred(*it)) return true;
+      }
+
+      return false;
+    }
+  };
+
+  template<typename F>
+  exists_impl(F&&) -> exists_impl<F>;
+}
+
+namespace harmony::inline monadic_op {
+
+  inline constexpr auto exists = []<typename F>(F&& f) noexcept(std::is_nothrow_move_constructible_v<F>) -> detail::exists_impl<F> {
+    return detail::exists_impl{ .f_pred = std::forward<F>(f) };
+  };
+
+}
 
 namespace harmony::detail {
 
