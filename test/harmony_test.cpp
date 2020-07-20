@@ -532,7 +532,7 @@ int main() {
       20_i == r;
 
       r = harmony::monas(std::optional<int>{})
-        | match([](int){ assert(false); return 0;}, [](std::nullopt_t) { return 1;});
+        | fold([](int){ assert(false); return 0;}, [](std::nullopt_t) { return 1;});
       
       1_i == r;
     }
@@ -542,13 +542,28 @@ int main() {
       tl::expected<double, int> ex{3.14};
 
       // 戻り値のstringはモナド的な型と見なされるのでmonasでラップされてる（ここでは明示的な暗黙変換により取り出している）
-      std::string str = ex | match([](double d) { return std::to_string(d); }, [](int n) { return std::to_string(n); });
+      std::string str = ex | fold([](double d) { return std::to_string(d); }, [](int n) { return std::to_string(-n); });
 
       ut::expect(str == "3.140000"sv);
 
       tl::expected<double, int> ex2{tl::unexpect, 3};
       std::string str2 = ex2 | match([](double d) { return std::to_string(d); }, [](int n) { return std::to_string(-n); });
       ut::expect(str2 == "-3"sv);
+    }
+    // 1引数match
+    {
+      using namespace std::string_view_literals;
+
+      tl::expected<double, int> ex{3.14};
+
+      // 戻り値のstringはモナド的な型と見なされるのでmonasでラップされてる（ここでは明示的な暗黙変換により取り出している）
+      std::string str = ex | match([](auto v) { return std::to_string(v); });
+
+      ut::expect(str == "3.140000"sv);
+
+      tl::expected<double, int> ex2{tl::unexpect, 3};
+      std::string str2 = ex2 | fold([](auto v) { return std::to_string(v); });
+      ut::expect(str2 == "3"sv);
     }
     // 結果が再びモナド的な型となるmatch
     {

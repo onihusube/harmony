@@ -457,7 +457,7 @@ namespace harmony {
   * @tparam T 保持する値の型
   */
   template<typename T>
-  struct sachet<T, nil> {
+  struct sachet<nil, T> {
     T value;
 
     [[nodiscard]]
@@ -472,7 +472,7 @@ namespace harmony {
   };
   
   template<typename T>
-  sachet(T&&) -> sachet<std::remove_cvref_t<T>, nil>;
+  sachet(T&&) -> sachet<nil, std::remove_cvref_t<T>>;
 
 
 } // namespace harmony
@@ -505,7 +505,7 @@ namespace harmony::detail {
     if constexpr (unwrappable<R>) {
       return common and std::is_nothrow_constructible_v<monas<R>, R>;
     } else {
-      return common and std::is_nothrow_constructible_v<monas<sachet<std::remove_cvref_t<R>, nil>>, R>;
+      return common and std::is_nothrow_constructible_v<monas<sachet<nil, std::remove_cvref_t<R>>>, R>;
     }
   }
   
@@ -812,6 +812,31 @@ namespace harmony::detail {
         }
       }
     }
+
+    template<either M>
+      requires std::same_as<nil, Ferr> and
+               std::invocable<Fok, traits::unwrap_t<M>> and
+               std::invocable<Fok, traits::unwrap_other_t<M>> and
+               std::common_with<std::invoke_result_t<Fok, traits::unwrap_t<M>>, std::invoke_result_t<Fok, traits::unwrap_other_t<M>>>
+    friend constexpr auto operator|(M&& m, match_impl self) {
+      using result_t = std::common_type_t<std::invoke_result_t<Fok, traits::unwrap_t<M>>, std::invoke_result_t<Fok, traits::unwrap_other_t<M>>>;
+
+      if constexpr (unwrappable<result_t>) {
+        if (cpo::validate(m)) {
+          return monas<result_t>(self.fmap_ok(cpo::unwrap(std::forward<M>(m))));
+        } else {
+          return monas<result_t>(self.fmap_ok(cpo::unwrap_other(std::forward<M>(m))));
+        }
+      } else {
+        if (cpo::validate(m)) {
+          return static_cast<result_t>(self.fmap_ok(cpo::unwrap(std::forward<M>(m))));
+        } else {
+          return static_cast<result_t>(self.fmap_ok(cpo::unwrap_other(std::forward<M>(m))));
+        }
+      }
+    }
+
+
   };
 
   template<typename Fok, typename Ferr>
@@ -821,7 +846,7 @@ namespace harmony::detail {
 
 namespace harmony::inline monadic_op {
 
-  inline constexpr auto match = []<typename Fok, typename Ferr>(Fok&& fok, Ferr&& ferr) noexcept(std::is_nothrow_move_constructible_v<Fok> and std::is_nothrow_move_constructible_v<Ferr>) -> detail::match_impl<Fok, Ferr> {
+  inline constexpr auto match = []<typename Fok, typename Ferr = nil>(Fok&& fok, Ferr&& ferr = {}) noexcept(std::is_nothrow_move_constructible_v<Fok> and std::is_nothrow_move_constructible_v<Ferr>) -> detail::match_impl<Fok, Ferr> {
     return detail::match_impl{ .fmap_ok = std::forward<Fok>(fok), .fmap_err = std::forward<Ferr>(ferr) };
   };
 
