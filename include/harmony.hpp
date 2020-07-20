@@ -474,9 +474,8 @@ namespace harmony {
     * @param f Callableオブジェクト
     */
     template<typename F>
-      requires list<M> and
-               monadic<F, std::ranges::iterator_t<T>>
-    friend constexpr auto operator|(monas&& self, F&& f) noexcept(detail::monadic_noexecpt_v<std::ranges::iterator_t<T>, F>) -> monas<T>&& {
+      requires list<M>
+    friend constexpr auto operator|(monas&& self, F&& f) noexcept(detail::monadic_noexecpt_v<std::ranges::iterator_t<T>, F>) -> monas<T>&& requires monadic<F, std::ranges::iterator_t<T>> {
       auto it = std::ranges::begin(*self);
       const auto fin = std::ranges::end(*self);
 
