@@ -475,7 +475,7 @@ namespace harmony {
     */
     template<typename F>
       requires list<M> and
-               requires monadic<F, std::ranges::iterator_t<T>>
+               monadic<F, std::ranges::iterator_t<T>>
     friend constexpr auto operator|(monas&& self, F&& f) noexcept(detail::monadic_noexecpt_v<std::ranges::iterator_t<T>, F>) -> monas<T>&& {
       auto it = std::ranges::begin(*self);
       const auto fin = std::ranges::end(*self);
