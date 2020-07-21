@@ -72,13 +72,35 @@ int main() {
 
 ### concept `uwrappable`
 
+The `uwrappable` concept determines whether a type is monadic and is a fundamental concept in this library.
+
+It's defined as follows:
+
+```cpp
+template<typename T>
+concept unwrappable = requires(T&& m) {
+  { harmony::cpo::unwrap(std::forward<T>(m)) } -> not_void;
+};
+```
+
+It is required to be able to retrieve the value contained in the type by `unwrap` CPO.
+
+#### CPO `unwrap`
+
+
 ### concept `maybe` `list`
 
+#### CPO `validate`
+
 ### concept `rewrappable`
+
+#### CPO `unit`
 
 ### concept `monadic`
 
 ### concept `either`
+
+#### CPO `unwrap_other`
 
 ### monadic operation `map/transform`
 ### monadic operation `map_err`
@@ -87,3 +109,7 @@ int main() {
 ### monadic operation `match/fold`
 ### monadic operation `exists`
 ### monadic operation `try_catch`
+### type `monas<T>`
+### type `sachet<L, R>`
+### operation `to_value<T>`
+
