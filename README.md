@@ -67,3 +67,23 @@ int main() {
 - Header only
 - Requires C++20 or later
     - Currently only supported by GCC 10.1
+
+## Facility
+
+### concept `uwrappable`
+
+### concept `maybe` `list`
+
+### concept `rewrappable`
+
+### concept `monadic`
+
+### concept `either`
+
+### monadic operation `map/transform`
+### monadic operation `map_err`
+### monadic operation `and_then`
+### monadic operation `or_else`
+### monadic operation `match/fold`
+### monadic operation `exists`
+### monadic operation `try_catch`
