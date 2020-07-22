@@ -663,7 +663,7 @@ int main() {
 
     // 例外を投げる処理
     auto str = try_catch(f, 4, 0)
-      | map([](int n) { assert(false); return n; })
+      | map([](int n) { assert(false); return std::string{}; })
       | map_err([](std::exception_ptr exptr) { 
           try { std::rethrow_exception(exptr); }
           catch(const char* message) {
