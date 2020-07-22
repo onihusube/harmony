@@ -1048,7 +1048,7 @@ namespace harmony::detail {
                without_narrowing_convertible<traits::unwrap_t<M>, T> and
                without_narrowing_convertible<traits::unwrap_other_t<M>, T>
     [[nodiscard]]
-    friend constexpr auto operator|(monas<M>&& m, map_to_impl) noexcept(noexcept(T(*std::move(m))) and noexcept(T(std::move(m.unwrap_err()))) -> T {
+    friend constexpr auto operator|(monas<M>&& m, map_to_impl) noexcept(noexcept(T(*std::move(m))) and noexcept(T(std::move(m.unwrap_err())))) -> T {
       if (m) {
         return T(std::move(*m));
       } else {
