@@ -1033,7 +1033,8 @@ namespace harmony::detail {
     template<maybe M>
       requires IsFold and
                std::default_initializable<T> and
-               without_narrowing_convertible<traits::unwrap_t<M>, T>
+               without_narrowing_convertible<traits::unwrap_t<M>, T> and
+               (not without_narrowing_convertible<traits::unwrap_other_t<M>, T>)
     [[nodiscard]]
     friend constexpr auto operator|(monas<M>&& m, map_to_impl) noexcept(noexcept(T(*std::move(m))) and std::is_nothrow_default_constructible_v<T>) -> T {
       if (m) {
