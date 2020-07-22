@@ -1027,6 +1027,10 @@ namespace harmony::detail {
       requires without_narrowing_convertible<traits::unwrap_t<M>, T>
     [[nodiscard]]
     friend constexpr auto operator|(monas<M>&& m, to_value_impl) noexcept(noexcept(T(*std::move(m)))) -> T {
+      if constexpr (maybe<M>) {
+        // maybeがここにフォールバックして来た時のために一応チェックしておく
+        assert(bool(m));
+      }
       return T(std::move(*m));
     }
 
@@ -1039,6 +1043,18 @@ namespace harmony::detail {
         return T(std::move(*m));
       } else {
         return T();
+      }
+    }
+
+    template<either M>
+      requires without_narrowing_convertible<traits::unwrap_t<M>, T> and
+               without_narrowing_convertible<traits::unwrap_other_t<M>, T>
+    [[nodiscard]]
+    friend constexpr auto operator|(monas<M>&& m, to_value_impl) noexcept(noexcept(T(*std::move(m))) and std::is_nothrow_default_constructible_v<T>) -> T {
+      if (m) {
+        return T(std::move(*m));
+      } else {
+        return T(std::move(m.unwrap_err()));
       }
     }
   };
