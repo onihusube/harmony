@@ -10,7 +10,7 @@ elif cppcompiler == 'gcc'
 endif
 
 #VSプロジェクトに編集しうるファイルを追加する
-vs_files = ['include/harmony.hpp', 'test/harmony_test.cpp']
+vs_files = ['include/harmony.hpp']
 
 #インクルードディレクトリ
 include_dir = include_directories('include')

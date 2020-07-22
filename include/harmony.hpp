@@ -1020,25 +1020,22 @@ namespace harmony::inline monadic_op {
 
 namespace harmony::detail {
 
-  template<typename T>
-  struct to_value_impl {
+  template<typename T, bool IsFold = false>
+  struct map_to_impl {
 
     template<unwrappable M>
-      requires without_narrowing_convertible<traits::unwrap_t<M>, T>
+      requires (not IsFold) and without_narrowing_convertible<traits::unwrap_t<M>, T>
     [[nodiscard]]
-    friend constexpr auto operator|(monas<M>&& m, to_value_impl) noexcept(noexcept(T(*std::move(m)))) -> T {
-      if constexpr (maybe<M>) {
-        // maybeがここにフォールバックして来た時のために一応チェックしておく
-        assert(bool(m));
-      }
+    friend constexpr auto operator|(monas<M>&& m, map_to_impl) noexcept(noexcept(T(*std::move(m)))) -> T {
       return T(std::move(*m));
     }
 
     template<maybe M>
-      requires std::default_initializable<T> and
+      requires IsFold and
+               std::default_initializable<T> and
                without_narrowing_convertible<traits::unwrap_t<M>, T>
     [[nodiscard]]
-    friend constexpr auto operator|(monas<M>&& m, to_value_impl) noexcept(noexcept(T(*std::move(m))) and std::is_nothrow_default_constructible_v<T>) -> T {
+    friend constexpr auto operator|(monas<M>&& m, map_to_impl) noexcept(noexcept(T(*std::move(m))) and std::is_nothrow_default_constructible_v<T>) -> T {
       if (m) {
         return T(std::move(*m));
       } else {
@@ -1047,10 +1044,11 @@ namespace harmony::detail {
     }
 
     template<either M>
-      requires without_narrowing_convertible<traits::unwrap_t<M>, T> and
+      requires IsFold and
+               without_narrowing_convertible<traits::unwrap_t<M>, T> and
                without_narrowing_convertible<traits::unwrap_other_t<M>, T>
     [[nodiscard]]
-    friend constexpr auto operator|(monas<M>&& m, to_value_impl) noexcept(noexcept(T(*std::move(m))) and std::is_nothrow_default_constructible_v<T>) -> T {
+    friend constexpr auto operator|(monas<M>&& m, map_to_impl) noexcept(noexcept(T(*std::move(m))) and noexcept(T(std::move(m.unwrap_err()))) -> T {
       if (m) {
         return T(std::move(*m));
       } else {
@@ -1062,7 +1060,23 @@ namespace harmony::detail {
 
 namespace harmony::inline monadic_op {
 
+  /**
+  * @brief 有効値を取り出して変換する、有効値を保持しているかのチェックを行わない
+  * @details 縮小変換は禁止
+  * @tparam T 変換先の型
+  */
   template<typename T>
-  inline constexpr detail::to_value_impl<T> to_value;
+    requires (not std::is_reference_v<T>)
+  inline constexpr detail::map_to_impl<T> map_to;
+
+  /**
+  * @brief 有効値及び無効値を取り出して同じ型に変換する
+  * @brief maybeな型が無効値を持つ場合、Tをデフォルト構築して返す
+  * @details 縮小変換は禁止
+  * @tparam T 変換先の型
+  */
+  template<typename T>
+    requires (not std::is_reference_v<T>)
+  inline constexpr detail::map_to_impl<T, true> fold_to;
 
 } // namespace harmony::inline monadic_op

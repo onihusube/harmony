@@ -359,7 +359,7 @@ int main() {
             }
             return s;
           })
-        | to_value<int>;
+        | map_to<int>;
 
       35_i == sum;
     }
@@ -657,7 +657,7 @@ int main() {
     bool r = try_catch(f, 4, 2)
       | map([](int n) { return n == 2; })
       | map_err([](auto exptr) { assert(false); return exptr;})
-      | to_value<bool>;
+      | map_to<bool>;
 
     ut::expect(r == true);
 
@@ -669,8 +669,9 @@ int main() {
           catch(const char* message) {
             return std::string{message};
           }
-        });
+        })
+      | fold_to<std::string>;
 
-    ut::expect(harmony::unwrap_other(str) == "division by zero"sv);
+    ut::expect(str == "division by zero"sv);
   };
 }
