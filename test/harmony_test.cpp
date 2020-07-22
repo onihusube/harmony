@@ -643,4 +643,34 @@ int main() {
       ut::expect(r == false);
     }
   };
+
+  "try_catch test"_test = [] {
+    using namespace harmony::monadic_op;
+    using namespace std::string_view_literals;
+
+    auto f = [](int n, int m) -> int {
+      if (m == 0) throw "division by zero";
+      return n / m;
+    };
+
+    // 例外を投げない処理
+    bool r = try_catch(f, 4, 2)
+      | map([](int n) { return n == 2; })
+      | map_err([](auto exptr) { assert(false); return exptr;})
+      | to_value<bool>;
+
+    ut::expect(r == true);
+
+    // 例外を投げる処理
+    auto str = try_catch(f, 4, 0)
+      | map([](int n) { assert(false); return n; })
+      | map_err([](std::exception_ptr exptr) { 
+          try { std::rethrow_exception(exptr); }
+          catch(const char* message) {
+            return std::string{message};
+          }
+        });
+
+    ut::expect(harmony::unwrap_other(str) == "division by zero"sv);
+  };
 }

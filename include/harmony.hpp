@@ -4,6 +4,7 @@
 #include <cassert>
 #include <variant>
 #include <optional>
+#include <functional>
 
 
 namespace harmony::inline concepts {
@@ -245,9 +246,14 @@ namespace harmony::inline concepts {
 namespace harmony::detail {
 
   template<typename T>
-  concept nullable = requires(T& t) {
-    t = nullptr;
-  };
+  concept pointer_like =
+    std::is_pointer_v<T> or
+    (weakly_indirectly_readable<T> and
+    requires(T& t) {
+      {bool(t)} -> std::same_as<bool>;
+      t = nullptr;
+      T(nullptr);
+    });
 
   template<typename T>
   concept has_error_func = requires(T&& t) {
@@ -271,7 +277,7 @@ namespace harmony::detail {
     }
 
     template<maybe T>
-      requires nullable<T>
+      requires pointer_like<T>
     constexpr auto operator()(const T&) const noexcept -> std::nullptr_t {
       return nullptr;
     }
@@ -992,6 +998,22 @@ namespace harmony::inline monadic_op {
 
   inline constexpr auto exists = []<typename F>(F&& f) noexcept(std::is_nothrow_move_constructible_v<F>) -> detail::exists_impl<F> {
     return detail::exists_impl{ .f_pred = std::forward<F>(f) };
+  };
+
+}
+
+namespace harmony::inline monadic_op {
+
+  inline constexpr  auto try_catch = []<typename F, typename... Args>(F&& f, Args&&... args) noexcept -> monas<sachet<std::exception_ptr, std::invoke_result_t<F, Args...>>> {
+    using R = std::invoke_result_t<F, Args...>;
+    using either_t = sachet<std::exception_ptr, R>;
+    using return_t = monas<either_t>;
+
+    try {
+      return return_t(either_t{ .value = std::variant<std::exception_ptr, R>(std::in_place_index<1>, std::invoke(std::forward<F>(f), std::forward<Args>(args)...)) });
+    } catch(...) {
+      return return_t(either_t{ .value = std::variant<std::exception_ptr, R>(std::in_place_index<0>, std::current_exception()) });
+    }
   };
 
 }
