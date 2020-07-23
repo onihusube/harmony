@@ -64,9 +64,12 @@ int main() {
 ## Overview
 
 - Generic library based on Customization Point Object (CPO) and Concept
+- All *bind* operator (`operator|`) is use *Hidden friends* idiom
 - Header only
 - Requires C++20 or later
-    - Currently only supported by GCC 10.1
+    - GCC 10.1 or later
+    - MSVC 2019 latest
+      - Some tests have been disabled
 
 ## Facility
 
