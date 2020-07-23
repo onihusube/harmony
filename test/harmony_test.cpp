@@ -6,7 +6,17 @@
 #include <list>
 #include <array>
 
+#ifdef _MSC_VER
+#pragma warning( push )
+#pragma warning(disable : 4459)
+#endif // _MSC_VER
+
 #include "boost/ut.hpp"
+
+#ifdef _MSC_VER
+#pragma warning( pop )
+#endif // _MSC_VER
+
 #include "expected.hpp"
 #include "harmony.hpp"
 
@@ -125,7 +135,7 @@ int main() {
       20_i == harmony::unwrap(opt);
     }
   };
-
+  
   "cpo validate test"_test = [] {
     {
       int *p = nullptr;
@@ -156,7 +166,7 @@ int main() {
       ut::expect(harmony::validate(v));
     }
   };
-
+ 
   "cpo unit test"_test = [] {
     {
       int n = 0;
@@ -352,7 +362,7 @@ int main() {
       auto sum = harmony::monas(std::vector<int>{1, 2, 3, 4, 5})
         | [](int n) { return 2*n; }
         | [](int n) { return n + 1;}
-        | map([](auto& vec) {
+        | map([](std::vector<int>& vec /*ここをautoで受けるようにするとMSVCはこける*/) {
             int s{};
             for (int n : vec) {
               s += n;
@@ -408,6 +418,7 @@ int main() {
       !ut::expect(harmony::validate(r));
       ut::expect(harmony::unwrap(r) == false);
     }
+#ifndef _MSC_VER
     {
       using namespace std::string_view_literals;
 
@@ -416,13 +427,14 @@ int main() {
       auto r = harmony::monas(ex)
         | [](int n) { return 2*n; }
         | [](int) { return tl::expected<int, std::string>{tl::unexpect, "fail test"};}
-        | map_err([](std::string str) { return str.append(" map_err"), str;})
+        | map_err([](std::string&& str) { str.append(" map_err"); return str; })  // ここのmap_errでMSVCはこける
         | map_err([](std::string str) { return str == "fail test map_err"sv;})
         | map([](int n) { assert(false); return n;});
 
       !ut::expect(not harmony::validate(r));
       ut::expect(harmony::unwrap_other(r) == true);
     }
+#endif // !_MSC_VER
   };
 
   "and_then test"_test = []() {
@@ -445,13 +457,14 @@ int main() {
       ut::expect(not harmony::validate(fail));
     }
 
+#ifndef _MSC_VER
     {
       using namespace std::string_view_literals;
 
       tl::expected<int, std::string> ex{10};
 
       auto r = harmony::monas(ex)
-        | and_then([](int n) { return tl::expected<int, std::string>{2*n}; })
+        | and_then([](int n) { return tl::expected<int, std::string>{2 * n}; })
         | and_then([](int n) { return tl::expected<double, std::string>{double(n)};});
 
       !ut::expect(harmony::validate(r));
@@ -465,6 +478,7 @@ int main() {
       !ut::expect(not harmony::validate(r2));
       ut::expect("failed!"sv == harmony::unwrap_other(r2));
     }
+#endif // !_MSC_VER
   };
 
   "or_else test"_test = [] {
@@ -486,6 +500,8 @@ int main() {
       ut::expect(harmony::validate(success));
       2.0_d == harmony::unwrap(success);
     }
+
+#ifndef _MSC_VER
     {
       using namespace std::string_view_literals;
 
@@ -505,6 +521,7 @@ int main() {
       !ut::expect(harmony::validate(r2));
       20_i == harmony::unwrap(r2);
     }
+#endif // !_MSC_VER
   };
 
   "match test"_test = [] {
@@ -536,6 +553,8 @@ int main() {
       
       1_i == r;
     }
+
+#ifndef _MSC_VER
     {
       using namespace std::string_view_literals;
 
@@ -564,6 +583,8 @@ int main() {
 
       ut::expect(str2 == "3"sv);
     }
+#endif // !_MSC_VER
+
     // 結果が再びモナド的な型となるmatch
     {
       int n = 10;

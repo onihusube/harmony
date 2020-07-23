@@ -6,6 +6,11 @@
 #include <optional>
 #include <functional>
 
+#ifdef _MSC_VER
+#pragma warning( push )
+#pragma warning(once : 4648)
+#endif // _MSC_VER
+
 
 namespace harmony::inline concepts {
 
@@ -47,12 +52,18 @@ namespace harmony::detail {
   */
   struct unwrap_impl {
 
+    /**
+    * @brief operator*によって値を取り出す
+    */
     template<weakly_indirectly_readable T>
     [[nodiscard]]
     constexpr decltype(auto) operator()(T&& t) const noexcept(noexcept(*std::forward<T>(t))) {
       return *std::forward<T>(t);
     }
 
+    /**
+    * @brief value()メンバ関数によって値を取り出す
+    */
     template<typename T>
       requires (not weakly_indirectly_readable<T>) and
                requires(T&& t) { {std::forward<T>(t).value()} -> not_void; }
@@ -61,6 +72,9 @@ namespace harmony::detail {
       return std::forward<T>(t).value();
     }
 
+    /**
+    * @brief unwrap()メンバ関数によって値を取り出す
+    */
     template<typename T>
       requires (not weakly_indirectly_readable<T>) and
                (not requires(T&& t) { {std::forward<T>(t).value()} -> not_void; }) and
@@ -70,6 +84,9 @@ namespace harmony::detail {
       return std::forward<T>(t).unwrap();
     }
 
+    /**
+    * @brief range（listモナド）はそのまま返す
+    */
     template<std::ranges::range R>
       requires (not weakly_indirectly_readable<R>)
     [[nodiscard]]
@@ -115,6 +132,9 @@ namespace harmony::detail {
   */
   struct validate_impl {
 
+    /**
+    * @brief 明示的なbool変換によって状態を取得
+    */
     template<unwrappable T>
       requires boolean_convertible<T>
     [[nodiscard]]
@@ -122,6 +142,9 @@ namespace harmony::detail {
       return bool(t);
     }
 
+    /**
+    * @brief has_value()メンバ関数によって状態を取得
+    */
     template<unwrappable T>
       requires (not boolean_convertible<T>) and
                requires(const T& t) { {t.has_value()} -> std::same_as<bool>; }
@@ -130,6 +153,9 @@ namespace harmony::detail {
       return t.has_value();
     }
 
+    /**
+    * @brief is_ok()メンバ関数によって状態を取得
+    */
     template<unwrappable T>
       requires (not boolean_convertible<T>) and
                (not requires(const T& t) { {t.has_value()} -> std::same_as<bool>; }) and
@@ -139,6 +165,9 @@ namespace harmony::detail {
       return t.is_ok();
     }
 
+    /**
+    * @brief std::ranges::empty()CPOによって状態を取得
+    */
     template<unwrappable T>
       requires (not boolean_convertible<T>) and
                requires(const T& t) { {std::ranges::empty(t)} -> std::same_as<bool>; }
@@ -196,6 +225,9 @@ namespace harmony::detail {
   */
   struct unit_impl {
 
+    /**
+    * @brief unwrapした結果に代入する
+    */
     template<unwrappable M, typename T>
       requires std::is_lvalue_reference_v<traits::unwrap_t<M&>> and
                std::assignable_from<traits::unwrap_t<M&>, T>
@@ -203,6 +235,9 @@ namespace harmony::detail {
       cpo::unwrap(m) = std::forward<T>(t);
     }
 
+    /**
+    * @brief モナド的型のオブジェクトそのものに直接代入する
+    */
     template<unwrappable M, typename T>
       requires (not (std::is_lvalue_reference_v<traits::unwrap_t<M&>> and std::assignable_from<traits::unwrap_t<M&>, T>)) and
                std::assignable_from<M&, T>
@@ -271,23 +306,35 @@ namespace harmony::detail {
   */
   struct unwrap_other_impl {
 
+    /**
+    * @brief std::optionalの無効値はstd::nullopt
+    */
     template<typename T>
     constexpr auto operator()(const std::optional<T>&) const noexcept -> std::nullopt_t {
       return std::nullopt;
     }
 
+    /**
+    * @brief pointer的な型の無効値はnullptr
+    */
     template<maybe T>
       requires pointer_like<T>
     constexpr auto operator()(const T&) const noexcept -> std::nullptr_t {
       return nullptr;
     }
 
+    /**
+    * @brief error()メンバ関数によって無効値を取得
+    */
     template<maybe T>
       requires has_error_func<T>
     constexpr decltype(auto) operator()(T&& t) const noexcept(noexcept(std::forward<T>(t).error())) {
       return std::forward<T>(t).error();
     }
 
+    /**
+    * @brief unwrap_err()メンバ関数によって無効値を取得
+    */
     template<maybe T>
       requires (not has_error_func<T>) and
                has_unwrap_err_func<T>
@@ -394,54 +441,90 @@ namespace harmony {
       requires std::constructible_from<T, U>
     constexpr monas(U&& bound) noexcept(std::is_nothrow_constructible_v<T, U>) requires (not has_reference)
       : m_monad(std::forward<U>(bound)) {}
-
+      
+    /**
+    * @brief 保持するモナド的オブジェクトの有効値を取得
+    */
     [[nodiscard]]
     constexpr auto& operator*() noexcept(noexcept(cpo::unwrap(m_monad))) {
       return cpo::unwrap(m_monad);
     }
 
+    /**
+    * @brief 保持するモナド的オブジェクトの有効性を取得
+    */
     [[nodiscard]]
     constexpr explicit operator bool() const noexcept(noexcept(cpo::validate(m_monad))) requires maybe<M> {
       return cpo::validate(m_monad);
     }
 
+    /**
+    * @brief 保持するモナド的オブジェクトの無効値を取得
+    */
     [[nodiscard]]
     constexpr decltype(auto) unwrap_err() noexcept(noexcept(cpo::unwrap_other(m_monad))) requires either<M> {
       return cpo::unwrap_other(m_monad);
     }
 
+    /**
+    * @brief 保持するモナド的オブジェクトの有効値への暗黙変換
+    * @details 左辺値参照で保持しているときのオーバーロード、常に参照で返す
+    */
     constexpr operator T&() noexcept requires has_reference {
       return m_monad;
     }
     
+    /**
+    * @brief 保持するモナド的オブジェクトの有効値への暗黙変換
+    * @details 直接保持しているときのオーバーロード、参照で返す
+    */
     constexpr operator T&() & noexcept requires (not has_reference) {
       return m_monad;
     }
 
+    /**
+    * @brief 保持するモナド的オブジェクトの有効値への暗黙変換
+    * @details 直接保持しているときのオーバーロード、右辺値参照で返す
+    */
     constexpr operator T&&() && noexcept requires (not has_reference) {
       return std::move(m_monad);
     }
 
+    /**
+    * @brief 保持するモナド的型がmap関数を利用可能であるならば有効化する
+    */
     template<detail::map_reusable<M> F>
     constexpr auto map(F&& f) && noexcept(noexcept(std::move(m_monad).map(std::forward<F>(f)))) {
       return std::move(m_monad).map(std::forward<F>(f));
     }
 
+    /**
+    * @brief 保持するモナド的型がmap_err関数を利用可能であるならば有効化する
+    */
     template<detail::map_err_reusable<M> F>
     constexpr auto map_err(F&& f) && noexcept(noexcept(std::move(m_monad).map_err(std::forward<F>(f)))) requires either<M> {
       return std::move(m_monad).map_err(std::forward<F>(f));
     }
 
+    /**
+    * @brief 保持するモナド的型がmap_error関数を利用可能であるならば有効化する
+    */
     template<detail::map_error_reusable<M> F>
     constexpr auto map_err(F&& f) && noexcept(noexcept(std::move(m_monad).map_error(std::forward<F>(f)))) requires either<M> {
       return std::move(m_monad).map_error(std::forward<F>(f));
     }
 
+    /**
+    * @brief 保持するモナド的型がand_then関数を利用可能であるならば有効化する
+    */
     template<detail::and_then_reusable<M> F>
     constexpr auto and_then(F&& f) && noexcept(noexcept(std::move(m_monad).and_then(std::forward<F>(f)))) requires either<M> {
       return std::move(m_monad).and_then(std::forward<F>(f));
     }
 
+    /**
+    * @brief 保持するモナド的型がor_else関数を利用可能であるならば有効化する
+    */
     template<detail::or_else_reusable<M> F>
     constexpr auto or_else(F&& f) && noexcept(noexcept(std::move(m_monad).or_else(std::forward<F>(f)))) requires either<M> {
       return std::move(m_monad).or_else(std::forward<F>(f));
@@ -476,6 +559,7 @@ namespace harmony {
 
     /**
     * @brief bind演算子、listな型に対してのもの
+    * @details リストの各要素に対して渡された関数を呼び出し、再代入する
     * @param self monas<T>のrvalue
     * @param f Callableオブジェクト
     */
@@ -595,7 +679,7 @@ namespace harmony::inline concepts {
 namespace harmony::detail {
 
   template<typename F, typename M, typename R>
-  consteval bool check_nothrow_map() {
+  constexpr bool check_nothrow_map() {
     bool common = noexcept(cpo::unwrap(std::declval<M>())) and std::is_nothrow_invocable_v<F, traits::unwrap_t<M>>;
     if constexpr (unwrappable<R>) {
       return common and std::is_nothrow_constructible_v<monas<R>, R>;
@@ -704,8 +788,8 @@ namespace harmony::inline monadic_op {
 namespace harmony::detail {
 
   template<typename F, typename M>
-  consteval bool check_nothrow_reuse_map_err() {
-    if constexpr (detail::map_err_reusable<F, M>) {
+  constexpr bool check_nothrow_reuse_map_err() {
+    if constexpr (detail::map_err_reusable<F&, M>) {
       return noexcept(std::declval<M>().map_err(std::declval<F>()));
     } else {
       return noexcept(std::declval<M>().map_error(std::declval<F>()));
@@ -725,7 +809,7 @@ namespace harmony::detail {
       requires map_err_func_reusable<F&, M> and
                not_void_resulted<F, traits::unwrap_other_t<M>>
     friend constexpr specialization_of<monas> auto operator|(M&& m, map_err_impl self) noexcept(check_nothrow_reuse_map_err<F&, M>()) {
-      if constexpr (map_err_reusable<F, M>) {
+      if constexpr (map_err_reusable<F&, M>) {
         return monas(std::forward<M>(m).map_err(self.fmap));
       } else {
         return monas(std::forward<M>(m).map_error(self.fmap));
@@ -766,6 +850,10 @@ namespace harmony::detail {
     }
 
   };
+
+  template<typename F>
+  map_err_impl(F&&) -> map_err_impl<F>;
+
 } // namespace harmony::detail
 
 namespace harmony::inline monadic_op {
@@ -1081,3 +1169,7 @@ namespace harmony::inline monadic_op {
   inline constexpr detail::map_to_impl<T, true> fold_to;
 
 } // namespace harmony::inline monadic_op
+
+#ifdef _MSC_VER
+#pragma warning( pop )
+#endif // _MSC_VER
