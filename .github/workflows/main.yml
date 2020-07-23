@@ -11,3 +11,14 @@ jobs:
       with:
         name: 'harmony'
         uri: 'https://github.com/onihusube/harmony.git'
+  
+  MSVC latest:
+    runs-on: windows-latest
+    steps:
+    - uses: actions/checkout@v1
+    - uses: actions/setup-python@v1
+      with:
+        python-version: '3.x'
+    - run: pip install meson ninja
+    - uses: ilammy/msvc-dev-cmd@v1.3.0
+    - run: meson test -C build -v
