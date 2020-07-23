@@ -427,7 +427,7 @@ int main() {
       auto r = harmony::monas(ex)
         | [](int n) { return 2*n; }
         | [](int) { return tl::expected<int, std::string>{tl::unexpect, "fail test"};}
-        | map_err([](std::string&& str) { str.append(" map_err"); return str; })  // ここのmap_errでMSVCはこける
+        | map_err([](std::string str) { str.append(" map_err"); return str; })  // ここのmap_errでMSVCはこける
         | map_err([](std::string str) { return str == "fail test map_err"sv;})
         | map([](int n) { assert(false); return n;});
 
