@@ -12,7 +12,7 @@ jobs:
         name: 'harmony'
         uri: 'https://github.com/onihusube/harmony.git'
   
-  MSVC latest:
+  MSVC:
     runs-on: windows-latest
     steps:
     - uses: actions/checkout@v1
