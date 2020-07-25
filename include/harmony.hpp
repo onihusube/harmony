@@ -919,8 +919,8 @@ namespace harmony::inline monadic_op {
 
   /**
   * @brief Eitherモナドな型の有効値をmapした別のEither型へ変換する（有効値だけを変換し、無効値はそのまま）
-  * @brief M<T, E>のような型をM<U, E>のように変換する（Either<L, R>をEither<L, S>へ変換する）
-  * @param f M<T, E> -> M<U, E> へmapするCallableオブジェクト（戻り値型はEitherを返さなければならない）
+  * @brief M<T, E>のような型をN<U, E>のように変換する（Either1<L, R>をEither2<L, S>へ変換する）
+  * @param f T -> N<U, E> へmapするCallableオブジェクト（戻り値型はEitherを返さなければならない）
   */
   inline constexpr auto and_then = []<typename F>(F&& f) noexcept(std::is_nothrow_move_constructible_v<F>) -> detail::and_then_impl<F> {
     return detail::and_then_impl{ .fmap = std::forward<F>(f) };
@@ -978,8 +978,8 @@ namespace harmony::inline monadic_op {
 
   /**
   * @brief Eitherモナドな型の無効値をmapした別のEither型へ変換する（無効値だけを変換し、有効値はそのまま）
-  * @brief M<T, E>のような型をM<T, F>のように変換する（Either<L, R>をEither<M, R>へ変換する）
-  * @param f M<T, E> -> M<T, F> へmapするCallableオブジェクト（戻り値型はEitherを返さなければならない）
+  * @brief M<T, E>のような型をN<T, F>のように変換する（Either1<L, R>をEither2<L, S>へ変換する）
+  * @param f E -> N<T, F> へmapするCallableオブジェクト（戻り値型はEitherを返さなければならない）
   */
   inline constexpr auto or_else = []<typename F>(F&& f) noexcept(std::is_nothrow_move_constructible_v<F>) -> detail::or_else_impl<F> {
     return detail::or_else_impl{ .fmap = std::forward<F>(f) };
@@ -1041,6 +1041,13 @@ namespace harmony::detail {
 
 namespace harmony::inline monadic_op {
 
+  /**
+  * @brief Eitherモナドな型の有効値と無効値をmapする
+  * @brief M<T, E>のような型の有効値と無効値をそれぞれ共通の型Rに変換する
+  * @param fok T -> R へmapするCallableオブジェクト
+  * @param fee E -> R へmapするCallableオブジェクト（省略された場合、どちらに対してもfokによるmapを試みる）
+  * @return Rがunwrappableならばmonas<R>、それ以外の場合はRのオブジェクト、R = voidならば戻り値はない
+  */
   inline constexpr auto match = []<typename Fok, typename Ferr = nil>(Fok&& fok, Ferr&& ferr = {}) noexcept(std::is_nothrow_move_constructible_v<Fok> and std::is_nothrow_move_constructible_v<Ferr>) -> detail::match_impl<Fok, Ferr> {
     return detail::match_impl{ .fmap_ok = std::forward<Fok>(fok), .fmap_err = std::forward<Ferr>(ferr) };
   };
@@ -1084,6 +1091,11 @@ namespace harmony::detail {
 
 namespace harmony::inline monadic_op {
 
+  /**
+  * @brief maybeモナドな型の有効値が指定された条件を満たすかをチェックする
+  * @param f 有効値に対する述語オブジェクト
+  * @return 無効値を保持していた場合はfalse、そうでなければfを適用した結果のbool値
+  */
   inline constexpr auto exists = []<typename F>(F&& f) noexcept(std::is_nothrow_move_constructible_v<F>) -> detail::exists_impl<F> {
     return detail::exists_impl{ .f_pred = std::forward<F>(f) };
   };
@@ -1092,6 +1104,12 @@ namespace harmony::inline monadic_op {
 
 namespace harmony::inline monadic_op {
 
+  /**
+  * @brief 受け取った関数を呼び出し、その結果か例外ポインタのどちらかを保持したeitherを返す
+  * @param f 例外を投げうるCallableオブジェクト
+  * @param args fの引数
+  * @return f(args...)の戻り値型をRとすると、Either<std::exception_ptr, R>のようなオブジェクト
+  */
   inline constexpr  auto try_catch = []<typename F, typename... Args>(F&& f, Args&&... args) noexcept -> monas<sachet<std::exception_ptr, std::invoke_result_t<F, Args...>>> {
     using R = std::invoke_result_t<F, Args...>;
     using either_t = sachet<std::exception_ptr, R>;
