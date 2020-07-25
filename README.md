@@ -90,15 +90,15 @@ It is required to be able to retrieve the value contained in the type by `unwrap
 
 #### CPO `unwrap`
 
-The name `harmony::​unwrap` denotes a customization point object.
+The name `harmony::unwrap` denotes a customization point object.
 
 Given a subexpression `E` with type `T`, let `t` be an lvalue that denotes the reified object for `E`. Then:
 
-1. If `T` is an pointer type or indirectly readable (by `operator*`) class type, `harmony::​unwrap(E)` is expression-equivalent to `*t`.
-2. Otherwise, if `t.value()` is a valid expression whose type not void, `harmony::​unwrap(E)` is expression-equivalent to `t.value()`.
-3. Otherwise, if `t.unwrap()` is a valid expression whose type not void, `harmony::​unwrap(E)` is expression-equivalent to `t.unwrap()`.
-4. Otherwise, if `T` modeles `std::ranges::range`, `harmony::​unwrap(E)` is `E`.
-5. Otherwise, `harmony::​unwrap(E)` is ill-formed.
+1. If `T` is an pointer type or indirectly readable (by `operator*`) class type, `harmony::unwrap(E)` is expression-equivalent to `*t`.
+2. Otherwise, if `t.value()` is a valid expression whose type not void, `harmony::unwrap(E)` is expression-equivalent to `t.value()`.
+3. Otherwise, if `t.unwrap()` is a valid expression whose type not void, `harmony::unwrap(E)` is expression-equivalent to `t.unwrap()`.
+4. Otherwise, if `T` modeles `std::ranges::range`, `harmony::unwrap(E)` is `E`.
+5. Otherwise, `harmony::unwrap(E)` is ill-formed.
 
 If `E` is an rvalue, we get the same result as above with `t` as the rvalue.
 
@@ -173,8 +173,6 @@ concept monadic =
   std::invocable<F, traits::unwrap_t<M>> and
   rewrappable<M, std::invoke_result_t<F, traits::unwrap_t<M>>>;
 ```
-
-This represents part of the monad laws.
 
 ### concept `either`
 
