@@ -701,7 +701,7 @@ namespace harmony::detail {
     [[no_unique_address]] F fmap;
 
     template<unwrappable M>
-      requires detail::map_reusable<M, F&> and
+      requires detail::map_reusable<F&, M> and
                not_void_resulted<F, traits::unwrap_t<M>>
     friend constexpr specialization_of<monas> auto operator|(M&& m, map_impl self) noexcept(noexcept(std::forward<M>(m).map(self.fmap))) {
       return monas(std::forward<M>(m).map(self.fmap));
@@ -725,7 +725,7 @@ namespace harmony::detail {
     }
 
     template<either M>
-      requires (not detail::map_reusable<M, F&>) and
+      requires (not detail::map_reusable<F&, M>) and
                not_void_resulted<F, traits::unwrap_t<M>> and
                either<std::remove_reference_t<std::invoke_result_t<F, traits::unwrap_t<M>>>>
     friend constexpr specialization_of<monas> auto operator|(M&& m, map_impl self) {
@@ -747,7 +747,7 @@ namespace harmony::detail {
     }
     
     template<either M>
-      requires (not detail::map_reusable<M, F&>) and
+      requires (not detail::map_reusable<F&, M>) and
                not_void_resulted<F, traits::unwrap_t<M>> and
                (not either<std::remove_reference_t<std::invoke_result_t<F, traits::unwrap_t<M>>>>)
     friend constexpr specialization_of<monas> auto operator|(M&& m, map_impl self) {
@@ -886,7 +886,7 @@ namespace harmony::detail {
     [[no_unique_address]] F fmap;
     
     template<either M>
-      requires (not and_then_reusable<F, M>) and
+      requires (not and_then_reusable<F&, M>) and
                std::invocable<F, traits::unwrap_t<M>> and
                either<std::invoke_result_t<F, traits::unwrap_t<M>>> and
                std::constructible_from<std::remove_reference_t<std::invoke_result_t<F, traits::unwrap_t<M>>>, traits::unwrap_other_t<M>>
@@ -905,7 +905,7 @@ namespace harmony::detail {
     }
 
     template<either M>
-      requires and_then_reusable<F, M>
+      requires and_then_reusable<F&, M>
     friend constexpr specialization_of<monas> auto operator|(M&& m, and_then_impl self) noexcept(noexcept(monas(std::forward<M>(m).and_then(self.fmap)))) {
       return monas(std::forward<M>(m).and_then(self.fmap));
     }
@@ -943,7 +943,7 @@ namespace harmony::detail {
     [[no_unique_address]] F fmap;
 
     template<either M>
-      requires (not or_else_reusable<F, M>) and
+      requires (not or_else_reusable<F&, M>) and
                std::invocable<F, traits::unwrap_other_t<M>> and
                either<std::invoke_result_t<F, traits::unwrap_other_t<M>>> and
                std::constructible_from<std::remove_reference_t<std::invoke_result_t<F, traits::unwrap_other_t<M>>>, traits::unwrap_t<M>>
@@ -962,7 +962,7 @@ namespace harmony::detail {
     }
 
     template<either M>
-      requires or_else_reusable<F, M>
+      requires or_else_reusable<F&, M>
     friend constexpr specialization_of<monas> auto operator|(M&& m, or_else_impl self) noexcept(noexcept(monas(std::forward<M>(m).or_else(self.fmap)))) {
       return monas(std::forward<M>(m).or_else(self.fmap));
     }

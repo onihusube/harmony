@@ -373,6 +373,8 @@ int main() {
 
       35_i == sum;
     }
+
+#ifndef _MSC_VER
     {
       using namespace std::string_view_literals;
       tl::expected<int, std::string> ex{10};
@@ -387,6 +389,7 @@ int main() {
       ut::expect(harmony::validate(r));
       "22.0"sv == harmony::unwrap(r);
     }
+#endif // !_MSC_VER
   };
 
   "map_err test"_test = [] {
