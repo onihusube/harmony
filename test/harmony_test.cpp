@@ -328,6 +328,71 @@ int main() {
     }
   };
 
+  "then test"_test = [] {
+    using namespace harmony::monadic_op;
+    {
+      std::optional<int> opt = 10;
+
+      // 暗黙変換可能
+      std::optional<int> result = opt
+        | then([](int n) { return std::optional<int>{n + n}; })
+        | then([](int n) { return std::optional<int>{n + 100}; });
+
+      !ut::expect(harmony::validate(result));
+      120_i == harmony::unwrap(result);
+      // 状態は起点のオブジェクトに伝搬する
+      ut::expect(opt == result);
+    }
+    {
+      std::optional<int> opt = 10;
+
+      // 途中で失敗する処理のチェーン
+      std::optional<int> result = opt
+        | then( [](int n) { return std::optional<int>{ n + n }; })
+        | [](int n) { return n + 100; }
+        | [](int) { return std::nullopt; }
+        | [](int n) { return n * n; };
+
+      ut::expect(not harmony::validate(result));
+      // 状態は起点のオブジェクトに伝搬する
+      ut::expect(opt == result);
+    }
+    {
+      int n = 10;
+      int* p = &n;
+
+      auto m = p
+        | then([](int n) { return n + n; })
+        | [](int n) { return n + 100; };
+
+      !ut::expect(harmony::validate(m));
+      120_i == *m;
+      // 状態は起点のオブジェクトに伝搬する
+      ut::expect(n == *m);
+    }
+    {
+      auto r = std::vector<int>{1, 2, 3, 4, 5}
+        | then([](int n) { return 2 * n; })
+        | [](int n) { return n + 1; };
+
+      !ut::expect(harmony::validate(r));
+
+      ut::expect(std::vector<int>{3, 5, 7, 9, 11} == harmony::unwrap(r));
+    }
+    {
+      tl::expected<int, std::string> ex{ 10 };
+
+      auto r = ex
+        | then([](int n) { return 2 * n; })
+        | [](int n) { return n + 1; };
+
+      ut::expect(harmony::validate(r));
+      // 状態は起点のオブジェクトに伝搬する
+      ut::expect(*r == ex);
+      21_i == harmony::unwrap(r);
+    }
+  };
+
   "map test"_test = [] {
     using namespace harmony::monadic_op;
     {

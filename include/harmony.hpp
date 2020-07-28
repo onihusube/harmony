@@ -678,6 +678,37 @@ namespace harmony::inline concepts {
 
 namespace harmony::detail {
 
+  template<typename F>
+  struct then_impl {
+    [[no_unique_address]] F fmap;
+
+    template<unwrappable M>
+      requires requires(M&& m, F& f) { monas(std::forward<M>(m)) | f; }
+    friend constexpr specialization_of<monas> auto operator|(M&& m, then_impl self) noexcept(noexcept(monas(std::forward<M>(m)) | self.fmap)) {
+      return monas(std::forward<M>(m)) | self.fmap;
+    }
+
+  };
+
+  template<typename F>
+  then_impl(F&&) -> then_impl<F>;
+
+}
+
+namespace harmony::inline monadic_op{
+
+  /**
+  * @brief 左辺のオブジェクトをmonasで包んだうえで、右辺のCallableをbindする
+  * @brief チェーンの最初のオブジェクトをmonasで包むのを短縮する
+  * @param f bindするCallableオブジェクト
+  */
+  inline constexpr auto then = []<typename F>(F&& f) noexcept(std::is_nothrow_move_constructible_v<F>) -> detail::then_impl<F> {
+    return detail::then_impl{.fmap = std::forward<F>(f) };
+  };
+}
+
+namespace harmony::detail {
+
   template<typename F, typename M, typename R>
   constexpr bool check_nothrow_map() {
     bool common = noexcept(cpo::unwrap(std::declval<M>())) and std::is_nothrow_invocable_v<F, traits::unwrap_t<M>>;
