@@ -43,6 +43,29 @@ namespace harmony::inline concepts {
       { std::type_identity_t<To[]>{std::forward<From>(x)} } -> std::same_as<To[1]>;
     };
 
+  namespace variant_like_detail {
+    template <typename V>
+    inline constexpr bool is_two_arguments_v = false;
+
+    template <typename L, typename R, template <typename, typename> class V>
+    inline constexpr bool is_two_arguments_v<V<L, R>> = true;
+
+    using std::get;
+  
+    template<typename V>
+    concept gettable = requires(V&& v) {
+      get<0>(std::forward<V>(v));
+      get<1>(std::forward<V>(v));
+    };
+  }
+
+  template<typename V>
+  concept variant_like = 
+    variant_like_detail::is_two_arguments_v<V> and
+    requires(V&& v) {
+      {v.index()} -> std::integral;
+    } and
+    variant_like_detail::gettable<V>;
 }
 
 namespace harmony::detail {
@@ -92,6 +115,16 @@ namespace harmony::detail {
     [[nodiscard]]
     constexpr auto operator()(R&& r) const noexcept -> R&& {
       return std::forward<R>(r);
+    }
+
+    /**
+    * @brief 2要素variantは1つ目の型の値を取得
+    */
+    template<variant_like V>
+    [[nodiscard]]
+    constexpr decltype(auto) operator()(V&& v) const {
+      using std::get;
+      return get<0>(std::forward<V>(v));
     }
   };
 
@@ -174,6 +207,15 @@ namespace harmony::detail {
     [[nodiscard]]
     constexpr bool operator()(const T& t) const noexcept(noexcept(std::ranges::empty(t))) {
       return not std::ranges::empty(t);
+    }
+
+    /**
+    * @brief 2要素variantはindex()メンバ関数で取得
+    */
+    template<variant_like V>
+    [[nodiscard]]
+    constexpr bool operator()(V&& v) const noexcept { 
+      return v.index == 0;
     }
   };
   
@@ -340,6 +382,16 @@ namespace harmony::detail {
                has_unwrap_err_func<T>
     constexpr decltype(auto) operator()(T&& t) const noexcept(noexcept(std::forward<T>(t).unwrap_err())) {
       return std::forward<T>(t).unwrap_err();
+    }
+
+    /**
+    * @brief 2要素variantは2つ目の型の値を取得
+    */
+    template<variant_like V>
+    [[nodiscard]]
+    constexpr decltype(auto) operator()(V&& v) const {
+      using std::get;
+      return get<1>(std::forward<V>(v));
     }
   };
 
