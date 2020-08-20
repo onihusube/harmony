@@ -68,6 +68,7 @@ int main() {
     ut::expect(harmony::unwrappable<std::vector<int>>);
     ut::expect(harmony::unwrappable<std::unique_ptr<int>>);
     ut::expect(harmony::unwrappable<std::shared_ptr<int>>);
+    ut::expect(harmony::unwrappable<std::variant<int, double>>);
     ut::expect(harmony::unwrappable<simple_result<int, std::string>>);
     ut::expect(harmony::unwrappable<tl::expected<int, std::string>>);
   };
@@ -78,6 +79,7 @@ int main() {
     ut::expect(harmony::maybe<std::vector<int>>);
     ut::expect(harmony::maybe<std::unique_ptr<int>>);
     ut::expect(harmony::maybe<std::shared_ptr<int>>);
+    ut::expect(harmony::maybe<std::variant<int, double>>);
     ut::expect(harmony::maybe<simple_result<int, std::string>>);
     ut::expect(harmony::maybe<tl::expected<int, std::string>>);
   };
@@ -110,6 +112,7 @@ int main() {
     ut::expect(harmony::either<std::optional<int>>);
     ut::expect(harmony::either<std::unique_ptr<int>>);
     ut::expect(harmony::either<std::shared_ptr<int>>);
+    ut::expect(harmony::either<std::variant<int, double>>);
     ut::expect(harmony::either<simple_result<int, std::string>>);
     ut::expect(harmony::either<tl::expected<int, std::string>>);
   };
@@ -133,6 +136,11 @@ int main() {
       opt = 20;
 
       20_i == harmony::unwrap(opt);
+    }
+    {
+      std::variant<int, std::string> v{std::in_place_index<0>, 20};
+
+      20_i == harmony::unwrap(v);
     }
   };
   
@@ -164,6 +172,15 @@ int main() {
       v.push_back(10);
 
       ut::expect(harmony::validate(v));
+    }
+    {
+      std::variant<int, std::string> v{std::in_place_index<0>, 20};
+
+      ut::expect(harmony::validate(v));
+
+      std::variant<int, std::string> v2{std::in_place_index<1>, "str"};
+
+      ut::expect(not harmony::validate(v2));
     }
   };
  
@@ -217,6 +234,13 @@ int main() {
       simple_result<int, std::string> res{std::string("test either")};
 
       auto &str = harmony::unwrap_other(res);
+
+      ut::expect(str == "test either");
+    }
+    {
+      std::variant<int, std::string> v{std::in_place_index<1>, "test either"};
+
+      auto &str = harmony::unwrap_other(v);
 
       ut::expect(str == "test either");
     }

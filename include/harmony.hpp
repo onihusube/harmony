@@ -61,7 +61,7 @@ namespace harmony::inline concepts {
 
   template<typename V>
   concept variant_like = 
-    variant_like_detail::is_two_arguments_v<V> and
+    variant_like_detail::is_two_arguments_v<std::remove_cvref_t<V>> and
     requires(V&& v) {
       {v.index()} -> std::integral;
     } and
@@ -121,6 +121,7 @@ namespace harmony::detail {
     * @brief 2要素variantは1つ目の型の値を取得
     */
     template<variant_like V>
+      requires (not weakly_indirectly_readable<V>)
     [[nodiscard]]
     constexpr decltype(auto) operator()(V&& v) const {
       using std::get;
@@ -214,8 +215,8 @@ namespace harmony::detail {
     */
     template<variant_like V>
     [[nodiscard]]
-    constexpr bool operator()(V&& v) const noexcept { 
-      return v.index == 0;
+    constexpr bool operator()(const V& v) const noexcept { 
+      return v.index() == 0;
     }
   };
   
