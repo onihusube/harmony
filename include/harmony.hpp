@@ -33,6 +33,9 @@ namespace harmony::inline concepts {
     {*std::forward<T>(t)} -> not_void;
   };
 
+  template<typename T>
+  concept not_weakly_indirectly_readable = not weakly_indirectly_readable<T>;
+
   /**
   * @brief 縮小変換を起こさずにFrom -> Toへ変換可能
   */
@@ -70,6 +73,14 @@ namespace harmony::inline concepts {
 
 namespace harmony::detail {
 
+  template<typename T>
+  concept value_func_usable = requires(T&& t) {
+    {std::forward<T>(t).value()} -> not_void;
+  };
+
+  template<typename T>
+  concept not_value_func_usable = not value_func_usable<T>;
+
   /**
   * @brief unwrap CPOの実装
   */
@@ -88,8 +99,8 @@ namespace harmony::detail {
     * @brief value()メンバ関数によって値を取り出す
     */
     template<typename T>
-      requires (not weakly_indirectly_readable<T>) and
-               requires(T&& t) { {std::forward<T>(t).value()} -> not_void; }
+      requires not_weakly_indirectly_readable<T> and
+               value_func_usable<T>
     [[nodiscard]]
     constexpr decltype(auto) operator()(T&& t) const noexcept(noexcept(std::forward<T>(t).value())) {
       return std::forward<T>(t).value();
@@ -99,8 +110,8 @@ namespace harmony::detail {
     * @brief unwrap()メンバ関数によって値を取り出す
     */
     template<typename T>
-      requires (not weakly_indirectly_readable<T>) and
-               (not requires(T&& t) { {std::forward<T>(t).value()} -> not_void; }) and
+      requires not_weakly_indirectly_readable<T> and
+               not_value_func_usable<T> and
                requires(T&& t) { {std::forward<T>(t).unwrap()} -> not_void; }
     [[nodiscard]]
     constexpr decltype(auto) operator()(T&& t) const noexcept(noexcept(std::forward<T>(t).unwrap())) {
@@ -111,7 +122,8 @@ namespace harmony::detail {
     * @brief range（listモナド）はそのまま返す
     */
     template<std::ranges::range R>
-      requires (not weakly_indirectly_readable<R>)
+      requires not_weakly_indirectly_readable<R> and
+               not_value_func_usable<R>
     [[nodiscard]]
     constexpr auto operator()(R&& r) const noexcept -> R&& {
       return std::forward<R>(r);
@@ -121,7 +133,8 @@ namespace harmony::detail {
     * @brief 2要素variantは1つ目の型の値を取得
     */
     template<variant_like V>
-      requires (not weakly_indirectly_readable<V>)
+      requires not_weakly_indirectly_readable<V> and
+               not_value_func_usable<V>
     [[nodiscard]]
     constexpr decltype(auto) operator()(V&& v) const {
       using std::get;
@@ -157,9 +170,21 @@ namespace harmony::inline concepts {
   concept boolean_convertible = requires(const T& t) {
     bool(t);
   };
+
+  template<typename T>
+  concept not_boolean_convertible = not boolean_convertible<T>;
+
 }
 
 namespace harmony::detail {
+
+  template<typename T>
+  concept has_value_func_usable = requires(const T& t) {
+    {t.has_value()} -> std::same_as<bool>;
+  };
+
+  template<typename T>
+  concept not_has_value_func_usable = not has_value_func_usable<T>;
 
   /**
   * @brief validate CPOの実装
@@ -180,8 +205,8 @@ namespace harmony::detail {
     * @brief has_value()メンバ関数によって状態を取得
     */
     template<unwrappable T>
-      requires (not boolean_convertible<T>) and
-               requires(const T& t) { {t.has_value()} -> std::same_as<bool>; }
+      requires not_boolean_convertible<T> and
+               has_value_func_usable<T>
     [[nodiscard]]
     constexpr bool operator()(const T& t) const noexcept(noexcept(t.has_value())) {
       return t.has_value();
@@ -191,8 +216,8 @@ namespace harmony::detail {
     * @brief is_ok()メンバ関数によって状態を取得
     */
     template<unwrappable T>
-      requires (not boolean_convertible<T>) and
-               (not requires(const T& t) { {t.has_value()} -> std::same_as<bool>; }) and
+      requires not_boolean_convertible<T> and
+               not_has_value_func_usable<T> and
                requires(const T& t) { {t.is_ok()} -> std::same_as<bool>; }
     [[nodiscard]]
     constexpr bool operator()(const T& t) const noexcept(noexcept(t.is_ok())) {
@@ -203,7 +228,8 @@ namespace harmony::detail {
     * @brief std::ranges::empty()CPOによって状態を取得
     */
     template<unwrappable T>
-      requires (not boolean_convertible<T>) and
+      requires not_boolean_convertible<T> and
+               not_has_value_func_usable<T> and
                requires(const T& t) { {std::ranges::empty(t)} -> std::same_as<bool>; }
     [[nodiscard]]
     constexpr bool operator()(const T& t) const noexcept(noexcept(std::ranges::empty(t))) {
@@ -214,6 +240,8 @@ namespace harmony::detail {
     * @brief 2要素variantはindex()メンバ関数で取得
     */
     template<variant_like V>
+      requires not_boolean_convertible<V> and
+               not_has_value_func_usable<V>
     [[nodiscard]]
     constexpr bool operator()(const V& v) const noexcept { 
       return v.index() == 0;
@@ -263,6 +291,14 @@ namespace harmony::traits {
 
 namespace harmony::detail {
 
+  template<typename M, typename T>
+  concept unwrap_and_assignable =
+    std::is_lvalue_reference_v<traits::unwrap_t<M&>> and
+    std::assignable_from<traits::unwrap_t<M&>, T>;
+
+  template<typename M, typename T>
+  concept not_unwrap_and_assignable = not unwrap_and_assignable<M, T>;
+
   /**
   * @brief unit CPOの実装
   */
@@ -272,8 +308,7 @@ namespace harmony::detail {
     * @brief unwrapした結果に代入する
     */
     template<unwrappable M, typename T>
-      requires std::is_lvalue_reference_v<traits::unwrap_t<M&>> and
-               std::assignable_from<traits::unwrap_t<M&>, T>
+      requires unwrap_and_assignable<M, T>
     constexpr void operator()(M& m, T&& t) const noexcept(noexcept(cpo::unwrap(m) = std::forward<T>(t))) {
       cpo::unwrap(m) = std::forward<T>(t);
     }
@@ -282,7 +317,7 @@ namespace harmony::detail {
     * @brief モナド的型のオブジェクトそのものに直接代入する
     */
     template<unwrappable M, typename T>
-      requires (not (std::is_lvalue_reference_v<traits::unwrap_t<M&>> and std::assignable_from<traits::unwrap_t<M&>, T>)) and
+      requires not_unwrap_and_assignable<M, T> and
                std::assignable_from<M&, T>
     constexpr void operator()(M& m, T&& t) const noexcept(noexcept(m = std::forward<T>(t))) {
       m = std::forward<T>(t);
@@ -334,14 +369,20 @@ namespace harmony::detail {
     });
 
   template<typename T>
-  concept has_error_func = requires(T&& t) {
+  concept error_func_usable = requires(T&& t) {
     {std::forward<T>(t).error()} -> not_void;
   };
 
   template<typename T>
-  concept has_unwrap_err_func = requires(T&& t) {
+  concept not_error_func_usable = not error_func_usable<T>;
+
+  template<typename T>
+  concept unwrap_err_func_usable = requires(T&& t) {
     {std::forward<T>(t).unwrap_err()} -> not_void;
   };
+
+  template<typename T>
+  concept not_unwrap_err_func_usable = not unwrap_err_func_usable<T>;
 
 
   /**
@@ -370,7 +411,7 @@ namespace harmony::detail {
     * @brief error()メンバ関数によって無効値を取得
     */
     template<maybe T>
-      requires has_error_func<T>
+      requires error_func_usable<T>
     constexpr decltype(auto) operator()(T&& t) const noexcept(noexcept(std::forward<T>(t).error())) {
       return std::forward<T>(t).error();
     }
@@ -379,8 +420,8 @@ namespace harmony::detail {
     * @brief unwrap_err()メンバ関数によって無効値を取得
     */
     template<maybe T>
-      requires (not has_error_func<T>) and
-               has_unwrap_err_func<T>
+      requires not_error_func_usable<T> and
+               unwrap_err_func_usable<T>
     constexpr decltype(auto) operator()(T&& t) const noexcept(noexcept(std::forward<T>(t).unwrap_err())) {
       return std::forward<T>(t).unwrap_err();
     }
@@ -389,6 +430,8 @@ namespace harmony::detail {
     * @brief 2要素variantは2つ目の型の値を取得
     */
     template<variant_like V>
+      requires not_error_func_usable<V> and
+               not_unwrap_err_func_usable<V>
     [[nodiscard]]
     constexpr decltype(auto) operator()(V&& v) const {
       using std::get;
@@ -458,6 +501,22 @@ namespace harmony {
     concept or_else_reusable = requires(T&& t, F&& f) {
       { std::forward<T>(t).or_else(std::forward<F>(f))} -> either;
     };
+    
+
+    template<typename F, typename T>
+    concept not_map_reusable = not map_reusable<F, T>;
+
+    template<typename F, typename T>
+    concept not_map_err_reusable = not map_err_reusable<F, T>;
+
+    template<typename F, typename T>
+    concept not_map_error_reusable = not map_error_reusable<F, T>;
+
+    template<typename F, typename T>
+    concept not_and_then_reusable = not and_then_reusable<F, T>;
+
+    template<typename F, typename T>
+    concept not_or_else_reusable = not or_else_reusable<F, T>;
   }
 
   /**
@@ -809,7 +868,7 @@ namespace harmony::detail {
     }
 
     template<either M>
-      requires (not detail::map_reusable<F&, M>) and
+      requires detail::not_map_reusable<F&, M> and
                not_void_resulted<F, traits::unwrap_t<M>> and
                either<std::remove_reference_t<std::invoke_result_t<F, traits::unwrap_t<M>>>>
     friend constexpr specialization_of<monas> auto operator|(M&& m, map_impl self) {
@@ -831,9 +890,8 @@ namespace harmony::detail {
     }
     
     template<either M>
-      requires (not detail::map_reusable<F&, M>) and
-               not_void_resulted<F, traits::unwrap_t<M>> and
-               (not either<std::remove_reference_t<std::invoke_result_t<F, traits::unwrap_t<M>>>>)
+      requires detail::not_map_reusable<F&, M> and
+               not_void_resulted<F, traits::unwrap_t<M>>
     friend constexpr specialization_of<monas> auto operator|(M&& m, map_impl self) {
       // 有効値の型
       using R = std::remove_cvref_t<std::invoke_result_t<F, traits::unwrap_t<M>>>;
@@ -883,6 +941,9 @@ namespace harmony::detail {
   template<typename F, typename M>
   concept map_err_func_reusable = map_err_reusable<F, M> or map_error_reusable<F, M>;
 
+  template<typename F, typename M>
+  concept not_map_err_func_reusable = not map_err_func_reusable<F, M>;
+
 
   template<typename F>
   struct map_err_impl {
@@ -901,7 +962,7 @@ namespace harmony::detail {
     }
 
     template<either M>
-      requires (not map_err_func_reusable<F&, M>) and
+      requires not_map_err_func_reusable<F&, M> and
                not_void_resulted<F, traits::unwrap_other_t<M>> and
                either<std::remove_reference_t<std::invoke_result_t<F, traits::unwrap_other_t<M>>>>
     friend constexpr specialization_of<monas> auto operator|(M&& m, map_err_impl self) {
@@ -917,9 +978,8 @@ namespace harmony::detail {
     }
     
     template<either M>
-      requires (not map_err_func_reusable<F&, M>) and
-               not_void_resulted<F, traits::unwrap_other_t<M>> and
-               (not either<std::remove_reference_t<std::invoke_result_t<F, traits::unwrap_other_t<M>>>>)
+      requires not_map_err_func_reusable<F&, M> and
+               not_void_resulted<F, traits::unwrap_other_t<M>>
     friend constexpr specialization_of<monas> auto operator|(M&& m, map_err_impl self) {
       // 有効値の型
       using R = std::remove_cvref_t<traits::unwrap_t<M>>;
@@ -970,7 +1030,7 @@ namespace harmony::detail {
     [[no_unique_address]] F fmap;
     
     template<either M>
-      requires (not and_then_reusable<F&, M>) and
+      requires not_and_then_reusable<F&, M> and
                std::invocable<F, traits::unwrap_t<M>> and
                either<std::invoke_result_t<F, traits::unwrap_t<M>>> and
                std::constructible_from<std::remove_reference_t<std::invoke_result_t<F, traits::unwrap_t<M>>>, traits::unwrap_other_t<M>>
@@ -1027,7 +1087,7 @@ namespace harmony::detail {
     [[no_unique_address]] F fmap;
 
     template<either M>
-      requires (not or_else_reusable<F&, M>) and
+      requires not_or_else_reusable<F&, M> and
                std::invocable<F, traits::unwrap_other_t<M>> and
                either<std::invoke_result_t<F, traits::unwrap_other_t<M>>> and
                std::constructible_from<std::remove_reference_t<std::invoke_result_t<F, traits::unwrap_other_t<M>>>, traits::unwrap_t<M>>
@@ -1222,9 +1282,9 @@ namespace harmony::detail {
 
     template<maybe M>
       requires IsFold and
-               std::default_initializable<T> and
-               without_narrowing_convertible<traits::unwrap_t<M>, T> and
-               (not without_narrowing_convertible<traits::unwrap_other_t<M>, T>)
+               without_narrowing_convertible<traits::unwrap_t<M>, T>and
+               (not without_narrowing_convertible<traits::unwrap_other_t<M>, T>) and
+               std::default_initializable<T> 
     [[nodiscard]]
     friend constexpr auto operator|(monas<M>&& m, map_to_impl) noexcept(noexcept(T(*std::move(m))) and std::is_nothrow_default_constructible_v<T>) -> T {
       if (m) {
