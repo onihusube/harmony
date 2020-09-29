@@ -69,7 +69,6 @@ int main() {
 - Requires C++20 or later
     - GCC 10.1 or later
     - MSVC 2019 Preview latest
-      - Some tests have been disabled
 
 ## Facility
 

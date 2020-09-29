@@ -550,7 +550,6 @@ int main() {
       35_i == sum;
     }
 
-#ifndef _MSC_VER
     {
       using namespace std::string_view_literals;
       tl::expected<int, std::string> ex{10};
@@ -565,7 +564,6 @@ int main() {
       ut::expect(harmony::validate(r));
       "22.0"sv == harmony::unwrap(r);
     }
-#endif // !_MSC_VER
   };
 
   "map_err test"_test = [] {
@@ -597,7 +595,7 @@ int main() {
       !ut::expect(harmony::validate(r));
       ut::expect(harmony::unwrap(r) == false);
     }
-#ifndef _MSC_VER
+
     {
       using namespace std::string_view_literals;
 
@@ -613,7 +611,6 @@ int main() {
       !ut::expect(not harmony::validate(r));
       ut::expect(harmony::unwrap_other(r) == true);
     }
-#endif // !_MSC_VER
   };
 
   "and_then test"_test = []() {
@@ -636,7 +633,6 @@ int main() {
       ut::expect(not harmony::validate(fail));
     }
 
-#ifndef _MSC_VER
     {
       using namespace std::string_view_literals;
 
@@ -657,7 +653,6 @@ int main() {
       !ut::expect(not harmony::validate(r2));
       ut::expect("failed!"sv == harmony::unwrap_other(r2));
     }
-#endif // !_MSC_VER
   };
 
   "or_else test"_test = [] {
@@ -680,7 +675,6 @@ int main() {
       2.0_d == harmony::unwrap(success);
     }
 
-#ifndef _MSC_VER
     {
       using namespace std::string_view_literals;
 
@@ -700,7 +694,6 @@ int main() {
       !ut::expect(harmony::validate(r2));
       20_i == harmony::unwrap(r2);
     }
-#endif // !_MSC_VER
   };
 
   "match test"_test = [] {
@@ -733,7 +726,6 @@ int main() {
       1_i == r;
     }
 
-#ifndef _MSC_VER
     {
       using namespace std::string_view_literals;
 
@@ -762,7 +754,6 @@ int main() {
 
       ut::expect(str2 == "3"sv);
     }
-#endif // !_MSC_VER
 
     // 結果が再びモナド的な型となるmatch
     {

@@ -11,6 +11,10 @@
 #pragma warning(once : 4648)
 #endif // _MSC_VER
 
+#ifdef __EDG__
+#include <ciso646>
+#endif
+
 
 namespace harmony::inline concepts {
 
