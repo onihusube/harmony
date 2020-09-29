@@ -69,6 +69,22 @@ namespace harmony::inline concepts {
       {v.index()} -> std::integral;
     } and
     variant_like_detail::gettable<V>;
+  
+  namespace future_like_detail {
+    template<typename F>
+    inline constexpr bool is_one_argument_v = false;
+
+    template<typename R, template <typename> class F>
+    inline constexpr bool is_one_argument_v<F<R>> = true;
+  }
+
+  template<typename F>
+  concept future_like =
+    future_like_detail::is_one_argument_v<std::remove_cvref_t<F>> and
+    requires(F& f, const F& cf) {
+      {f.get()}  -> not_void;
+      {cf.valid()} -> std::same_as<bool>;
+    };
 }
 
 namespace harmony::detail {
@@ -130,7 +146,7 @@ namespace harmony::detail {
     }
 
     /**
-    * @brief 2要素variantは1つ目の型の値を取得
+    * @brief 2要素variantは2つ目の型の値を取得
     */
     template<variant_like V>
       requires not_weakly_indirectly_readable<V> and
@@ -138,7 +154,26 @@ namespace harmony::detail {
     [[nodiscard]]
     constexpr decltype(auto) operator()(V&& v) const {
       using std::get;
-      return get<0>(std::forward<V>(v));
+      return get<1>(std::forward<V>(v));
+    }
+
+    /**
+    * @brief std::future/shread_futureと同等の型はget()関数で取得
+    * @details future<void>はとりあえずリジェクト
+    */
+    template<future_like F>
+    [[nodiscard]]
+    constexpr auto operator()(F&& f) const {
+      using R = decltype(std::forward<F>(f).get());
+      using result_t = std::conditional_t<std::is_reference_v<R>
+        , std::variant<std::exception_ptr, std::reference_wrapper<std::remove_reference_t<R>>>
+        , std::variant<std::exception_ptr, R>>;
+
+      try {
+        return result_t(std::in_place_index<1>, std::forward<F>(f).get());
+      } catch(...) {
+        return result_t(std::in_place_index<0>, std::current_exception());
+      }
     }
   };
 
@@ -244,7 +279,17 @@ namespace harmony::detail {
                not_has_value_func_usable<V>
     [[nodiscard]]
     constexpr bool operator()(const V& v) const noexcept { 
-      return v.index() == 0;
+      return v.index() == 1;
+    }
+
+    /**
+    * @brief std::future/shread_futureと同等の型はvalid()関数で取得
+    * @details こっちではfuture<void>も受け入れておく（一貫性のためにリジェクトする？
+    */
+    template<future_like F>
+    [[nodiscard]]
+    constexpr bool operator()(const F& f) const noexcept {
+      return f.valid();
     }
   };
   
@@ -427,7 +472,7 @@ namespace harmony::detail {
     }
 
     /**
-    * @brief 2要素variantは2つ目の型の値を取得
+    * @brief 2要素variantは1つ目の型の値を取得
     */
     template<variant_like V>
       requires not_error_func_usable<V> and
@@ -435,7 +480,7 @@ namespace harmony::detail {
     [[nodiscard]]
     constexpr decltype(auto) operator()(V&& v) const {
       using std::get;
-      return get<1>(std::forward<V>(v));
+      return get<0>(std::forward<V>(v));
     }
   };
 

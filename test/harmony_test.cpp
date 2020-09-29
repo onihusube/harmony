@@ -1,3 +1,5 @@
+#include "harmony.hpp"
+
 #include <optional>
 #include <vector>
 #include <cmath>
@@ -5,6 +7,7 @@
 #include <memory>
 #include <list>
 #include <array>
+#include <future>
 
 #ifdef _MSC_VER
 #pragma warning( push )
@@ -18,7 +21,6 @@
 #endif // _MSC_VER
 
 #include "expected.hpp"
-#include "harmony.hpp"
 
 template<typename T, typename E>
 struct simple_result {
@@ -71,6 +73,12 @@ int main() {
     ut::expect(harmony::unwrappable<std::variant<int, double>>);
     ut::expect(harmony::unwrappable<simple_result<int, std::string>>);
     ut::expect(harmony::unwrappable<tl::expected<int, std::string>>);
+    ut::expect(harmony::unwrappable<std::future<int>>);
+    ut::expect(harmony::unwrappable<std::future<int&>>);
+    ut::expect(not harmony::unwrappable<std::future<void>>);
+    ut::expect(harmony::unwrappable<std::shared_future<int>>);
+    ut::expect(harmony::unwrappable<std::shared_future<int&>>);
+    ut::expect(not harmony::unwrappable<std::shared_future<void>>);
   };
 
   "concept maybe test"_test = [] {
@@ -82,6 +90,12 @@ int main() {
     ut::expect(harmony::maybe<std::variant<int, double>>);
     ut::expect(harmony::maybe<simple_result<int, std::string>>);
     ut::expect(harmony::maybe<tl::expected<int, std::string>>);
+    ut::expect(harmony::maybe<std::future<int>>);
+    ut::expect(harmony::maybe<std::future<int &>>);
+    ut::expect(not harmony::maybe<std::future<void>>);
+    ut::expect(harmony::maybe<std::shared_future<int>>);
+    ut::expect(harmony::maybe<std::shared_future<int &>>);
+    ut::expect(not harmony::maybe<std::shared_future<void>>);
   };
 
   "concept list test"_test = [] {
@@ -138,9 +152,58 @@ int main() {
       20_i == harmony::unwrap(opt);
     }
     {
-      std::variant<int, std::string> v{std::in_place_index<0>, 20};
+      std::variant<int, std::string> v{std::in_place_index<1>, "test either"};
 
-      20_i == harmony::unwrap(v);
+      auto &str = harmony::unwrap(v);
+
+      ut::expect(str == "test either");
+    }
+    {
+      auto f = std::async([]{return 10;});
+
+      auto future_either = harmony::unwrap(f);
+
+      10_i == harmony::unwrap(future_either);
+
+      using either_t = decltype(future_either);
+      ut::expect(std::same_as<std::variant<std::exception_ptr, int>, either_t>);
+    }
+    {
+      std::future<int> f{};
+
+      auto future_either = harmony::unwrap(f);
+
+      try { 
+        std::rethrow_exception(harmony::unwrap_other(future_either)); 
+      } catch (const std::exception&) {
+        ut::expect(true);
+      } catch (...) {
+        ut::expect(false);
+      }
+    }
+    {
+      int n = 20;
+      auto f = std::async([&n]() mutable -> int& { return n; });
+
+      auto future_either = harmony::unwrap(f);
+
+      20_i == harmony::unwrap(future_either).get();
+
+      using either_t = decltype(future_either);
+      ut::expect(std::same_as<std::variant<std::exception_ptr, std::reference_wrapper<int>>, either_t>);
+    }
+    {
+      auto f = std::async([]{return 10;});
+
+      // shared_future取得
+      auto sf = f.share();
+
+      auto future_either = harmony::unwrap(sf);
+
+      10_i == harmony::unwrap(future_either).get();
+
+      using either_t = decltype(future_either);
+      ut::expect(std::same_as<std::variant<std::exception_ptr, std::reference_wrapper<const int>>, either_t>);
     }
   };
   
@@ -176,11 +239,37 @@ int main() {
     {
       std::variant<int, std::string> v{std::in_place_index<0>, 20};
 
-      ut::expect(harmony::validate(v));
+      ut::expect(not harmony::validate(v));
 
       std::variant<int, std::string> v2{std::in_place_index<1>, "str"};
 
-      ut::expect(not harmony::validate(v2));
+      ut::expect(harmony::validate(v2));
+    }
+    {
+      auto f = std::async([] { return 10; });
+
+      ut::expect(harmony::validate(f));
+
+      [[maybe_unused]] auto future_either = harmony::unwrap(f);
+
+      ut::expect(not harmony::validate(f));
+    }
+    {
+      auto f = std::async([] { return 10; });
+
+      ut::expect(harmony::validate(f));
+
+      // shared_future取得
+      auto sf = f.share();
+
+      ut::expect(not harmony::validate(f));
+
+      ut::expect(harmony::validate(sf));
+
+      [[maybe_unused]] auto future_either = harmony::unwrap(sf);
+
+      // shared_futureはget()の後でも共有状態を維持している
+      ut::expect(harmony::validate(sf));
     }
   };
  
@@ -238,11 +327,9 @@ int main() {
       ut::expect(str == "test either");
     }
     {
-      std::variant<int, std::string> v{std::in_place_index<1>, "test either"};
+      std::variant<int, std::string> v{std::in_place_index<0>, 20};
 
-      auto &str = harmony::unwrap_other(v);
-
-      ut::expect(str == "test either");
+      20_i == harmony::unwrap_other(v);
     }
   };
 

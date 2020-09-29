@@ -73,6 +73,9 @@
         "xtr1common": "cpp",
         "xtree": "cpp",
         "xutility": "cpp",
-        "cinttypes": "cpp"
+        "cinttypes": "cpp",
+        "condition_variable": "cpp",
+        "future": "cpp",
+        "stop_token": "cpp"
     }
 }
