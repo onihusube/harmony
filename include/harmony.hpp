@@ -139,14 +139,14 @@ namespace harmony::detail {
     }
 
     /**
-    * @brief range（listモナド）はそのまま返す
+    * @brief range（listモナド）はref_viewで返す
     */
     template<std::ranges::range R>
       requires not_weakly_indirectly_readable<R> and
                not_value_func_usable<R>
     [[nodiscard]]
-    constexpr auto operator()(R&& r) const noexcept -> R&& {
-      return std::forward<R>(r);
+    constexpr auto operator()(R&& r) const noexcept {
+      return std::views::all(r);
     }
 
     /**
@@ -607,7 +607,7 @@ namespace harmony {
     * @brief 保持するモナド的オブジェクトの有効値を取得
     */
     [[nodiscard]]
-    constexpr auto& operator*() noexcept(noexcept(cpo::unwrap(m_monad))) {
+    constexpr decltype(auto) operator*() noexcept(noexcept(cpo::unwrap(m_monad))) {
       return cpo::unwrap(m_monad);
     }
 

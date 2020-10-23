@@ -423,7 +423,8 @@ int main() {
 
       !ut::expect(harmony::validate(r));
 
-      ut::expect(std::vector<int>{3, 5, 7, 9, 11} == harmony::unwrap(r));
+      int arr[] = {3, 5, 7, 9, 11};
+      ut::expect(std::ranges::equal(arr, harmony::unwrap(r)));
     }
     {
       tl::expected<int, std::string> ex{10};
@@ -488,7 +489,8 @@ int main() {
 
       !ut::expect(harmony::validate(r));
 
-      ut::expect(std::vector<int>{3, 5, 7, 9, 11} == harmony::unwrap(r));
+      int arr[] = {3, 5, 7, 9, 11};
+      ut::expect(std::ranges::equal(arr, harmony::unwrap(r)));
     }
     {
       tl::expected<int, std::string> ex{ 10 };
@@ -538,9 +540,9 @@ int main() {
       auto sum = harmony::monas(std::vector<int>{1, 2, 3, 4, 5})
         | [](int n) { return 2*n; }
         | [](int n) { return n + 1;}
-        | map([](std::vector<int>& vec /*ここをautoで受けるようにするとMSVCはこける*/) {
+        | map([](auto ref_view) {
             int s{};
-            for (int n : vec) {
+            for (int n : ref_view) {
               s += n;
             }
             return s;
