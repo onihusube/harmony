@@ -603,7 +603,17 @@ namespace harmony {
       requires std::constructible_from<T, U>
     constexpr monas(U&& bound) noexcept(std::is_nothrow_constructible_v<T, U>) requires (not has_reference)
       : m_monad(std::forward<U>(bound)) {}
-      
+    
+    /**
+    * @brief future-likeな型から構築された時のコンストラクタ
+    */
+    template<concepts::future_like U>
+    constexpr monas(U&& future)
+      : m_monad{}
+    {
+      m_monad = cpo::unwrap(std::forward<U>(future));
+    }
+
     /**
     * @brief 保持するモナド的オブジェクトの有効値を取得
     */
@@ -753,7 +763,7 @@ namespace harmony {
   * @brief 参照から初期化された時はそのまま
   */
   template<typename T>
-    requires std::is_reference_v<T>
+    requires (not concepts::future_like<T> and std::is_lvalue_reference_v<T>)
   monas(T&) -> monas<T&>; // &要らないけど可読性のためにあえて書いてる
 
   /**
@@ -761,6 +771,12 @@ namespace harmony {
   */
   template<typename T>
   monas(T&&) -> monas<std::remove_cv_t<T>>;
+
+  /**
+  * @brief future-likeな型は特別扱いする
+  */
+  template<concepts::future_like T>
+  monas(T&&) -> monas<traits::unwrap_t<T>>;
 
   /**
   * @brief Eitherとなる単純なラッパー
@@ -859,6 +875,12 @@ namespace harmony::detail {
       requires requires(M&& m, F& f) { monas(std::forward<M>(m)) | f; }
     friend constexpr specialization_of<monas> auto operator|(M&& m, then_impl self) noexcept(noexcept(monas(std::forward<M>(m)) | self.fmap)) {
       return monas(std::forward<M>(m)) | self.fmap;
+    }
+
+    template<typename T>
+      requires requires(monas<T>&& m, F& f) {  std::move(m) | f; }
+    friend constexpr specialization_of<monas> auto operator|(monas<T>&& m, then_impl self) noexcept(noexcept(std::move(m) | self.fmap)) {
+      return std::move(m) | self.fmap;
     }
 
   };

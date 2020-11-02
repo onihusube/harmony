@@ -867,4 +867,66 @@ int main() {
 
     ut::expect(str == "division by zero"sv);
   };
+
+  "future test"_test = [] {
+    using namespace harmony::monadic_op;
+    using namespace std::chrono_literals;
+    using namespace std::string_view_literals;
+
+    // 例外を投げない
+    {
+      auto str = std::async([]() {
+                   std::this_thread::sleep_for(100ms);
+                   return 20;
+                 }) | then([](int n) { return n * 10; })
+                    | map([](int n) { return std::to_string(n);})
+                    | map_err([](auto) { return std::to_string(-1);})
+                    | fold_to<std::string>;
+
+      ut::expect(str == "200"sv);
+    }
+    // 例外を投げる
+    {
+      auto str = std::async([]() {
+                   std::this_thread::sleep_for(100ms);
+                   throw std::runtime_error("error!!");
+                   return 20;
+                 }) | then([](int n) { return n * 10; })
+                    | map([](int n) { return std::to_string(n);})
+                    | map_err([](auto exptr) {
+                        try {
+                          std::rethrow_exception(exptr);
+                        } catch (const std::exception& ex) {
+                          return std::string{ex.what()};
+                        } catch (...) {
+                          return std::to_string(-1);
+                        }
+                      })
+                    | fold_to<std::string>;
+
+      ut::expect(str == "error!!"sv);
+    }
+    // 空のfuture
+    {
+      std::future<int> fu{};
+
+      harmony::specialization_of<harmony::monas> auto fm = fu | then([](int n) { return n * 10; });
+
+      ut::expect(harmony::validate(fm) == false);
+
+      auto str = fm | map([](int n) { return std::to_string(n);})
+                    | map_err([](auto exptr) {
+                        try {
+                          std::rethrow_exception(exptr);
+                        } catch (const std::future_error& ex) {
+                          return std::string{"std::future_error"};
+                        } catch (...) {
+                          return std::string{"unknown"};
+                        }
+                      })
+                    | fold_to<std::string>;
+
+      ut::expect(str == "std::future_error"sv);
+    }
+  };
 }
