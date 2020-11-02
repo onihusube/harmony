@@ -592,11 +592,12 @@ namespace harmony {
     /**
     * @brief Tが参照である場合のコンストラクタ
     */
-    constexpr monas(T& bound) noexcept requires has_reference
+    constexpr monas(T bound) noexcept requires has_reference
       : m_monad(bound) {}
 
     /**
     * @brief Tがprvalueである場合のコンストラクタ
+    * @details 実際の引数の型UとTは異なる場合がある（const/volatileを推論補助で外しているため）
     */
     template<typename U>
       requires std::constructible_from<T, U>
@@ -747,7 +748,17 @@ namespace harmony {
       return std::move(self);
     }
   };
-  
+
+  /**
+  * @brief 参照から初期化された時はそのまま
+  */
+  template<typename T>
+    requires std::is_reference_v<T>
+  monas(T&) -> monas<T&>; // &要らないけど可読性のためにあえて書いてる
+
+  /**
+  * @brief xvalueから初期化された時はconst(volatileも？)を外す
+  */
   template<typename T>
   monas(T&&) -> monas<std::remove_cv_t<T>>;
 
@@ -810,7 +821,8 @@ namespace harmony {
       return std::move(value);
     }
   };
-  
+
+  // remove_cvrefしていいのだろうか・・・？
   template<typename T>
   sachet(T&&) -> sachet<nil, std::remove_cvref_t<T>>;
 
@@ -871,7 +883,7 @@ namespace harmony::inline monadic_op{
 namespace harmony::detail {
 
   template<typename F, typename M, typename R>
-  constexpr bool check_nothrow_map() {
+  consteval bool check_nothrow_map() {
     bool common = noexcept(cpo::unwrap(std::declval<M>())) and std::is_nothrow_invocable_v<F, traits::unwrap_t<M>>;
     if constexpr (unwrappable<R>) {
       return common and std::is_nothrow_constructible_v<monas<R>, R>;
