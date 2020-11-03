@@ -887,10 +887,9 @@ int main() {
     }
     // 例外を投げる
     {
-      auto str = std::async([]() {
+      auto str = std::async([]() -> int {
                    std::this_thread::sleep_for(100ms);
                    throw std::runtime_error("error!!");
-                   return 20;
                  }) | then([](int n) { return n * 10; })
                     | map([](int n) { return std::to_string(n);})
                     | map_err([](auto exptr) {

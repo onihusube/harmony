@@ -1353,27 +1353,28 @@ namespace harmony::inline monadic_op {
 
 namespace harmony::detail {
 
+  template<bool C>
+  concept not_fold = (not C);
+
   template<typename T, bool IsFold = false>
   struct map_to_impl {
 
     template<unwrappable M>
-      requires (not IsFold) and without_narrowing_convertible<traits::unwrap_t<M>, T>
+      requires not_fold<IsFold> and without_narrowing_convertible<traits::unwrap_t<M>, T>
     [[nodiscard]]
     friend constexpr auto operator|(monas<M>&& m, map_to_impl) noexcept(noexcept(T(*std::move(m)))) -> T {
       return T(std::move(*m));
     }
 
     template<maybe M>
-      requires IsFold and
-               without_narrowing_convertible<traits::unwrap_t<M>, T>and
-               (not without_narrowing_convertible<traits::unwrap_other_t<M>, T>) and
+      requires not_fold<IsFold> and without_narrowing_convertible<traits::unwrap_t<M>, T> and
                std::default_initializable<T> 
     [[nodiscard]]
     friend constexpr auto operator|(monas<M>&& m, map_to_impl) noexcept(noexcept(T(*std::move(m))) and std::is_nothrow_default_constructible_v<T>) -> T {
       if (m) {
         return T(std::move(*m));
       } else {
-        return T();
+        return T{};
       }
     }
 
