@@ -5,6 +5,7 @@
 #include <variant>
 #include <optional>
 #include <functional>
+#include <any>
 
 #ifdef _MSC_VER
 #pragma warning( push )
@@ -89,6 +90,32 @@ namespace harmony::inline concepts {
       {f.get()}  -> not_void;
       {cf.valid()} -> std::same_as<bool>;
     };
+
+  namespace detail {
+    template<typename T>
+    concept pointer = std::is_pointer_v<T>;
+
+    template<typename T>
+    concept reference = std::is_reference_v<T>;
+
+    template<typename A>
+    concept any_cast_usable = requires(A& a, const A& ca, A&& ra) {
+      {any_cast<int>(a)} -> not_void;
+      {any_cast<int>(ca)} -> not_void;
+      {any_cast<int>(std::move(ra))} -> not_void;
+      {any_cast<int&>(a)} -> reference;
+      {any_cast<int&>(ca)} -> reference;
+      {any_cast<int>(&a)} -> pointer;
+      {any_cast<int>(&ca)} -> pointer;
+    };
+  }
+  
+  template<typename A>
+  concept any_like =
+    requires(const A& any) {
+      {any.type()} -> std::same_as<const std::type_info&>;
+    } and 
+    detail::any_cast_usable<A>;
 }
 
 namespace harmony::detail {
@@ -97,9 +124,6 @@ namespace harmony::detail {
   concept value_func_usable = requires(T&& t) {
     {std::forward<T>(t).value()} -> not_void;
   };
-
-  template<typename T>
-  concept not_value_func_usable = not value_func_usable<T>;
 
   /**
   * @brief unwrap CPOの実装
@@ -131,7 +155,6 @@ namespace harmony::detail {
     */
     template<typename T>
       requires not_weakly_indirectly_readable<T> and
-               not_value_func_usable<T> and
                requires(T&& t) { {std::forward<T>(t).unwrap()} -> not_void; }
     [[nodiscard]]
     constexpr decltype(auto) operator()(T&& t) const noexcept(noexcept(std::forward<T>(t).unwrap())) {
@@ -142,8 +165,6 @@ namespace harmony::detail {
     * @brief range（listモナド）はref_viewで返す
     */
     template<std::ranges::range R>
-      requires not_weakly_indirectly_readable<R> and
-               not_value_func_usable<R>
     [[nodiscard]]
     constexpr auto operator()(R&& r) const noexcept {
       return std::views::all(r);
@@ -153,8 +174,6 @@ namespace harmony::detail {
     * @brief 2要素variantは2つ目の型の値を取得
     */
     template<variant_like V>
-      requires not_weakly_indirectly_readable<V> and
-               not_value_func_usable<V>
     [[nodiscard]]
     constexpr decltype(auto) operator()(V&& v) const {
       using std::get;
@@ -179,6 +198,15 @@ namespace harmony::detail {
         return result_t(std::in_place_index<0>, std::current_exception());
       }
     }
+
+    template<not_void R, any_like A>
+    decltype(auto) operator()(A&& any, std::in_place_type_t<R>) const {
+      if constexpr (std::is_pointer_v<R>) {
+        return any_cast<R>(&any);
+      } else {
+        return any_cast<R>(std::forward<A>(any));
+      }
+    }
   };
 
 } // harmony::detail
@@ -197,9 +225,9 @@ namespace harmony::inline concepts {
   /**
   * @brief モナド的とみなせる型である
   */
-  template<typename T>
-  concept unwrappable = requires(T&& m) {
-    { harmony::cpo::unwrap(std::forward<T>(m)) } -> not_void;
+  template<typename... T>
+  concept unwrappable = requires(T&&... m) {
+    { harmony::cpo::unwrap(std::forward<T>(m)...) } -> not_void;
   };
 
   /**
@@ -256,7 +284,6 @@ namespace harmony::detail {
     */
     template<unwrappable T>
       requires not_boolean_convertible<T> and
-               not_has_value_func_usable<T> and
                requires(const T& t) { {t.is_ok()} -> std::same_as<bool>; }
     [[nodiscard]]
     constexpr bool operator()(const T& t) const noexcept(noexcept(t.is_ok())) {
@@ -266,10 +293,8 @@ namespace harmony::detail {
     /**
     * @brief std::ranges::empty()CPOによって状態を取得
     */
-    template<unwrappable T>
-      requires not_boolean_convertible<T> and
-               not_has_value_func_usable<T> and
-               requires(const T& t) { {std::ranges::empty(t)} -> std::same_as<bool>; }
+    template<typename T>
+      requires requires(const T& t) { {std::ranges::empty(t)} -> std::same_as<bool>; }
     [[nodiscard]]
     constexpr bool operator()(const T& t) const noexcept(noexcept(std::ranges::empty(t))) {
       return not std::ranges::empty(t);
@@ -279,8 +304,6 @@ namespace harmony::detail {
     * @brief 2要素variantはindex()メンバ関数で取得
     */
     template<variant_like V>
-      requires not_boolean_convertible<V> and
-               not_has_value_func_usable<V>
     [[nodiscard]]
     constexpr bool operator()(const V& v) const noexcept { 
       return v.index() == 1;
