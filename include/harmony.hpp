@@ -127,6 +127,7 @@ namespace harmony::detail {
 
   /**
   * @brief unwrap CPOの実装
+  * @details 事前条件 : 各処理は取り出す値が存在している事を仮定する（言い換えると、validate()でチェック済みであること）
   */
   struct unwrap_impl {
 
@@ -135,7 +136,7 @@ namespace harmony::detail {
     */
     template<weakly_indirectly_readable T>
     [[nodiscard]]
-    constexpr decltype(auto) operator()(T&& t) const noexcept(noexcept(*std::forward<T>(t))) {
+    constexpr decltype(auto) operator()(T&& t) const noexcept {
       return *std::forward<T>(t);
     }
 
@@ -146,7 +147,7 @@ namespace harmony::detail {
       requires not_weakly_indirectly_readable<T> and
                value_func_usable<T>
     [[nodiscard]]
-    constexpr decltype(auto) operator()(T&& t) const noexcept(noexcept(std::forward<T>(t).value())) {
+    constexpr decltype(auto) operator()(T&& t) const noexcept {
       return std::forward<T>(t).value();
     }
 
@@ -157,7 +158,7 @@ namespace harmony::detail {
       requires not_weakly_indirectly_readable<T> and
                requires(T&& t) { {std::forward<T>(t).unwrap()} -> not_void; }
     [[nodiscard]]
-    constexpr decltype(auto) operator()(T&& t) const noexcept(noexcept(std::forward<T>(t).unwrap())) {
+    constexpr decltype(auto) operator()(T&& t) const noexcept {
       return std::forward<T>(t).unwrap();
     }
 
@@ -175,7 +176,7 @@ namespace harmony::detail {
     */
     template<variant_like V>
     [[nodiscard]]
-    constexpr decltype(auto) operator()(V&& v) const {
+    constexpr decltype(auto) operator()(V&& v) const noexcept {
       using std::get;
       return get<1>(std::forward<V>(v));
     }
@@ -249,9 +250,6 @@ namespace harmony::detail {
   concept has_value_func_usable = requires(const T& t) {
     {t.has_value()} -> std::same_as<bool>;
   };
-
-  template<typename T>
-  concept not_has_value_func_usable = not has_value_func_usable<T>;
 
   /**
   * @brief validate CPOの実装
@@ -368,9 +366,6 @@ namespace harmony::detail {
     std::is_lvalue_reference_v<traits::unwrap_t<M&>> and
     std::assignable_from<traits::unwrap_t<M&>, T>;
 
-  template<typename M, typename T>
-  concept not_unwrap_and_assignable = not unwrap_and_assignable<M, T>;
-
   /**
   * @brief unit CPOの実装
   */
@@ -389,7 +384,7 @@ namespace harmony::detail {
     * @brief モナド的型のオブジェクトそのものに直接代入する
     */
     template<unwrappable M, typename T>
-      requires not_unwrap_and_assignable<M, T> and
+      requires (not unwrap_and_assignable<M, T>) and
                std::assignable_from<M&, T>
     constexpr void operator()(M& m, T&& t) const noexcept(noexcept(m = std::forward<T>(t))) {
       m = std::forward<T>(t);
@@ -435,7 +430,7 @@ namespace harmony::detail {
     std::is_pointer_v<T> or
     (weakly_indirectly_readable<T> and
     requires(T& t) {
-      {bool(t)} -> std::same_as<bool>;
+      bool(t);
       t = nullptr;
       T(nullptr);
     });
@@ -446,19 +441,13 @@ namespace harmony::detail {
   };
 
   template<typename T>
-  concept not_error_func_usable = not error_func_usable<T>;
-
-  template<typename T>
   concept unwrap_err_func_usable = requires(T&& t) {
     {std::forward<T>(t).unwrap_err()} -> not_void;
   };
 
-  template<typename T>
-  concept not_unwrap_err_func_usable = not unwrap_err_func_usable<T>;
-
-
   /**
   * @brief unwrap_other CPOの実装
+  * @details 事前条件 : それぞれの処理は有効値を保持していない事を仮定する（あらかじめvalidate()してから利用する）
   */
   struct unwrap_other_impl {
 
@@ -484,7 +473,7 @@ namespace harmony::detail {
     */
     template<maybe T>
       requires error_func_usable<T>
-    constexpr decltype(auto) operator()(T&& t) const noexcept(noexcept(std::forward<T>(t).error())) {
+    constexpr decltype(auto) operator()(T&& t) const noexcept {
       return std::forward<T>(t).error();
     }
 
@@ -492,9 +481,8 @@ namespace harmony::detail {
     * @brief unwrap_err()メンバ関数によって無効値を取得
     */
     template<maybe T>
-      requires not_error_func_usable<T> and
-               unwrap_err_func_usable<T>
-    constexpr decltype(auto) operator()(T&& t) const noexcept(noexcept(std::forward<T>(t).unwrap_err())) {
+      requires unwrap_err_func_usable<T>
+    constexpr decltype(auto) operator()(T&& t) const noexcept {
       return std::forward<T>(t).unwrap_err();
     }
 
@@ -502,10 +490,8 @@ namespace harmony::detail {
     * @brief 2要素variantは1つ目の型の値を取得
     */
     template<variant_like V>
-      requires not_error_func_usable<V> and
-               not_unwrap_err_func_usable<V>
     [[nodiscard]]
-    constexpr decltype(auto) operator()(V&& v) const {
+    constexpr decltype(auto) operator()(V&& v) const noexcept {
       using std::get;
       return get<0>(std::forward<V>(v));
     }
