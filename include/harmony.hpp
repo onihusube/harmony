@@ -559,6 +559,11 @@ namespace harmony {
     concept or_else_reusable = requires(T&& t, F&& f) {
       { std::forward<T>(t).or_else(std::forward<F>(f))} -> either;
     };
+
+    template<typename V, typename T>
+    concept value_or_reusable = requires(T&& t, V&& v) {
+      { std::forward<T>(t).value_or(std::forward<V>(v))} -> std::same_as<V>;
+    };
     
 
     template<typename F, typename T>
@@ -709,6 +714,14 @@ namespace harmony {
     template<detail::or_else_reusable<M> F>
     constexpr auto or_else(F&& f) && noexcept(noexcept(std::move(m_monad).or_else(std::forward<F>(f)))) requires either<M> {
       return std::move(m_monad).or_else(std::forward<F>(f));
+    }
+
+    /**
+    * @brief 保持するモナド的型がvalue_or関数を利用可能であるならば有効化する
+    */
+    template<detail::value_or_reusable<M> U>
+    constexpr auto value_or(U&& v) && noexcept(noexcept(std::move(m_monad).value_or(std::forward<U>(v)))) {
+      return std::move(m_monad).value_or(std::forward<U>(v));
     }
 
   public:
@@ -1422,6 +1435,36 @@ namespace harmony::inline monadic_op {
   template<typename T>
     requires (not std::is_reference_v<T>)
   inline constexpr detail::map_to_impl<T, true> fold_to;
+
+} // namespace harmony::inline monadic_op
+
+namespace harmony::detail {
+
+  template<typename U>
+  struct value_or_impl {
+    U tmp_hold;
+
+    template<unwrappable M>
+      requires detail::value_or_reusable<U, M>
+    [[nodiscard]]
+    friend constexpr auto operator|(monas<M>&& m, value_or_impl&& self) noexcept(noexcept(std::move(m).value_or(std::forward<U>(self.tmp_hold)))) {
+      return std::move(m).value_or(std::forward<U>(self.tmp_hold));
+    }
+  };
+
+  template<typename U>
+  value_or_impl(U&&) -> value_or_impl<U>;
+
+} // namespace detail
+
+namespace harmony::inline monadic_op {
+
+  /**
+  * @brief 有効値を保持していなければ指定された値を返す
+  */
+  inline constexpr auto value_or = []<typename T>(T&& v) {
+    return detail::value_or_impl{ .tmp_hold = std::forward<T>(v) };
+  };
 
 } // namespace harmony::inline monadic_op
 
