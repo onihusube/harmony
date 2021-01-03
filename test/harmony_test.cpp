@@ -917,7 +917,7 @@ int main() {
                     | map_err([](auto exptr) {
                         try {
                           std::rethrow_exception(exptr);
-                        } catch (const std::future_error& ex) {
+                        } catch (const std::future_error&) {
                           return std::string{"std::future_error"};
                         } catch (...) {
                           return std::string{"unknown"};

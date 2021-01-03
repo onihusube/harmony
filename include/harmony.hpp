@@ -91,7 +91,7 @@ namespace harmony::inline concepts {
       {cf.valid()} -> std::same_as<bool>;
     };
 
-  namespace detail {
+  namespace any_like_detail {
     template<typename T>
     concept pointer = std::is_pointer_v<T>;
 
@@ -115,7 +115,7 @@ namespace harmony::inline concepts {
     requires(const A& any) {
       {any.type()} -> std::same_as<const std::type_info&>;
     } and 
-    detail::any_cast_usable<A>;
+    any_like_detail::any_cast_usable<A>;
 }
 
 namespace harmony::detail {
