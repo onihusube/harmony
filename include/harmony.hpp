@@ -1445,10 +1445,24 @@ namespace harmony::detail {
     U tmp_hold;
 
     template<unwrappable M>
-      requires detail::value_or_reusable<U, M>
+      requires std::convertible_to<U, traits::unwrap_t<M>> and
+               detail::value_or_reusable<U, M>
     [[nodiscard]]
     friend constexpr auto operator|(monas<M>&& m, value_or_impl&& self) noexcept(noexcept(std::move(m).value_or(std::forward<U>(self.tmp_hold)))) {
       return std::move(m).value_or(std::forward<U>(self.tmp_hold));
+    }
+
+    template<unwrappable M>
+      requires std::convertible_to<U, traits::unwrap_t<M>>
+    [[nodiscard]]
+    friend constexpr auto operator|(monas<M>&& m, value_or_impl&& self) noexcept(noexcept(cpo::validate(m)) and noexcept(T(cpo::unwrap(m)))) {
+      using T = traits::unwrap_t<M>;
+
+      if (cpo::validate(m)) {
+        return cpo::unwrap(std::move(m));
+      } else {
+        return T(std::move(self.tmp_hold));
+      }
     }
   };
 
