@@ -57,6 +57,15 @@ struct simple_result {
   }
 };
 
+template<typename T>
+struct simple_unwrappable {
+  T t;
+
+  auto unwrap() const noexcept -> const T& {
+    return t;
+  }
+};
+
 
 namespace ut = boost::ut;
 
@@ -437,6 +446,35 @@ int main() {
       // 状態は起点のオブジェクトに伝搬する
       ut::expect(*r == ex);
       21_i == harmony::unwrap(r);
+    }
+    {
+      // voidを返す関数を与えるテスト1
+
+      std::optional<int> opt = 10;
+      int se = 0;
+  
+      std::optional<int> result = harmony::monas(opt)
+        | [&se](int) { ++se; }
+        | [&se](int) { ++se; };
+
+      ut::expect(harmony::validate(result));
+
+      ut::expect(*result == 10);
+      ut::expect(result == opt);
+      ut::expect(se == 2);
+    }
+    {
+      // voidを返す関数を与えるテスト2
+
+      simple_unwrappable su{ .t = 10 };
+      int se = 0;
+
+      harmony::monas(su)
+        | [&se](int) { ++se; }
+        | [&se](int) { ++se; };
+      
+      ut::expect(su.t == 10);
+      ut::expect(se == 2);
     }
   };
 

@@ -757,6 +757,7 @@ namespace harmony {
     * @param self monas<T>のrvalue
     * @param f Callableオブジェクト
     */
+    //template<std::invocable<std::ranges::range_reference_t<T>> F>
     template<typename F>
       requires list<M>
     friend constexpr auto operator|(monas&& self, F&& f) noexcept(detail::monadic_noexecpt_v<std::ranges::iterator_t<T>, F>) -> monas<T>&& requires monadic<F, std::ranges::iterator_t<T>> {
@@ -769,6 +770,49 @@ namespace harmony {
 
       return std::move(self);
     }
+
+    /**
+    * @brief bind演算子、戻り値を返さないfに対応する
+    * @details 保持するunwrappableオブジェクトの中身を渡して呼び出し、元のオブジェクトをそのまま返す
+    * @param self monas<T>のrvalue
+    * @param f 戻り値なしのCallableオブジェクト
+    */
+    template<std::invocable<traits::unwrap_t<T>> F>
+      requires std::same_as<std::invoke_result_t<F, traits::unwrap_t<T>>, void>
+    friend constexpr auto operator|(monas&& self, F&& f) noexcept(std::is_nothrow_invocable_v<F, traits::unwrap_t<T>>) -> monas<T>&& {
+      f(*self);
+      return std::move(self);
+    }
+
+    /**
+    * @brief bind演算子、maybeな型に対してのもの、戻り値を返さないfに対応する
+    * @details 保持するmaybeオブジェクトの中身を渡して呼び出し、元のオブジェクトをそのまま返す
+    * @param self monas<T>のrvalue
+    * @param f Callableオブジェクト
+    */
+    template<std::invocable<traits::unwrap_t<T>> F>
+      requires std::same_as<std::invoke_result_t<F, traits::unwrap_t<T>>, void> and
+               maybe<M>
+    friend constexpr auto operator|(monas&& self, F&& f) noexcept(noexcept(bool(self)) and std::is_nothrow_invocable_v<F, traits::unwrap_t<T>>) -> monas<T>&& {
+      if (self) {
+        f(*self);
+      }
+      return std::move(self);
+    }
+/*
+    template<typename F>
+      requires std::same_as<std::invoke_result_t<F, std::ranges::range_reference_t<T>>, void> and
+               list<M>
+    friend constexpr auto operator|(monas&& self, F&& f) noexcept(detail::monadic_noexecpt_v<std::ranges::iterator_t<T>, F>) -> monas<T>&& requires std::invocable<F, std::ranges::range_reference_t<T>> {
+      auto it = std::ranges::begin(*self);
+      const auto fin = std::ranges::end(*self);
+
+      for (; it != fin; ++it) {
+        cpo::unit(it, f(*it));
+      }
+
+      return std::move(self);
+    }*/
 
     /**
     * @brief 左辺値monasをxvalueにする
