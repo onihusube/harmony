@@ -910,7 +910,6 @@ namespace harmony {
   template<typename T>
   sachet(T&&) -> sachet<nil, std::remove_cvref_t<T>>;
 
-
 } // namespace harmony
 
 namespace harmony::inline concepts {
@@ -1527,6 +1526,91 @@ namespace harmony::inline monadic_op {
   };
 
 } // namespace harmony::inline monadic_op
+
+namespace harmony {
+  
+  /**
+  * @brief 有効値と無効値の関係を反転させるラッパークラス
+  * @details このクラスはeitherとなる
+  */
+  template<maybe T>
+  struct abekobe {
+
+    static_assert(not std::is_rvalue_reference_v<T>, "T must not be a rvalue reference type.");
+
+    // lvalueから初期化された際、Tは左辺値参照となる
+    static constexpr bool has_reference = std::is_lvalue_reference_v<T>;
+
+    // Tから参照を外した型、lvalueから初期化された時だけTと異なる
+    using M = std::remove_reference_t<T>;
+
+    T bound;
+
+    /**
+    * @brief 有効値を取得する
+    * @return Tの無効値を返す
+    */
+    [[nodiscard]]
+    constexpr decltype(auto) operator*() noexcept(noexcept(cpo::unwrap_other(bound))) requires either<M> {
+      return cpo::unwrap_other(bound);
+    }
+
+    [[nodiscard]]
+    constexpr decltype(auto) operator*() && noexcept(noexcept(cpo::unwrap_other(std::move(bound)))) requires either<M> and (not has_reference) {
+      return cpo::unwrap_other(std::move(bound));
+    }
+
+    /**
+    * @brief 有効値を取得する
+    * @brief Tがmaybeでしかない時は、無効値としてT自身を返す
+    */
+    [[nodiscard]]
+    constexpr auto operator*() noexcept -> T& {
+      return bound;
+    }
+
+    [[nodiscard]]
+    constexpr auto operator*() && noexcept -> T&& requires (not has_reference) {
+      return std::move(bound);
+    }
+
+    /**
+    * @brief 有効値を保持しているかを判定する
+    * @return Tが有効値を保持していればfalse, そうでないならtrue
+    */
+    [[nodiscard]]
+    constexpr explicit operator bool() const noexcept {
+      return not cpo::validate(bound);
+    }
+
+    /**
+    * @brief 無効値を取得する
+    * @return Tの有効値を返す
+    */
+    [[nodiscard]]
+    constexpr decltype(auto) unwrap_err() noexcept(noexcept(cpo::unwrap(bound))) {
+      return cpo::unwrap(bound);
+    }
+
+    [[nodiscard]]
+    constexpr decltype(auto) unwrap_err() && noexcept(noexcept(cpo::unwrap(std::move(bound)))) requires (not has_reference) {
+      return cpo::unwrap(std::move(bound));
+    }
+
+  };
+
+  template<maybe T>
+    requires std::is_lvalue_reference_v<T>
+  abekobe(T&) -> abekobe<T&>;
+
+  template<maybe T>
+  abekobe(T&&) -> abekobe<std::remove_cv_t<T>>;
+
+
+  inline constexpr auto invert = []<maybe M>(M&& m) {
+    return monas(abekobe{ .bound = std::forward<M>(m) });
+  };
+}
 
 #ifdef _MSC_VER
 #pragma warning( pop )

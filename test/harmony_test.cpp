@@ -8,6 +8,7 @@
 #include <list>
 #include <array>
 #include <future>
+#include <system_error>
 
 #ifdef _MSC_VER
 #pragma warning( push )
@@ -105,6 +106,7 @@ int main() {
     ut::expect(harmony::maybe<std::shared_future<int>>);
     ut::expect(harmony::maybe<std::shared_future<int &>>);
     ut::expect(not harmony::maybe<std::shared_future<void>>);
+    ut::expect(harmony::maybe<std::error_code>);
   };
 
   "concept list test"_test = [] {
@@ -138,6 +140,7 @@ int main() {
     ut::expect(harmony::either<std::variant<int, double>>);
     ut::expect(harmony::either<simple_result<int, std::string>>);
     ut::expect(harmony::either<tl::expected<int, std::string>>);
+    ut::expect(not harmony::either<std::error_code>);
   };
 
   "cpo unwrap test"_test = [] {
@@ -214,6 +217,12 @@ int main() {
       using either_t = decltype(future_either);
       ut::expect(std::same_as<std::variant<std::exception_ptr, std::reference_wrapper<const int>>, either_t>);
     }
+    {
+      int ec_int = static_cast<int>(std::errc::bad_address);
+      std::error_code ec{ec_int, std::system_category()};
+
+      ut::expect(harmony::unwrap(ec) == ec_int);
+    }
   };
   
   "cpo validate test"_test = [] {
@@ -279,6 +288,15 @@ int main() {
 
       // shared_futureはget()の後でも共有状態を維持している
       ut::expect(harmony::validate(sf));
+    }
+    {
+      std::error_code ec{};
+
+      ut::expect(not harmony::validate(ec));
+
+      ec.assign(int(std::errc::bad_address), std::system_category());
+
+      ut::expect(harmony::validate(ec));
     }
   };
  
@@ -965,5 +983,33 @@ int main() {
 
       ut::expect(str == "std::future_error"sv);
     }
+  };
+
+  "inert"_test = [] {
+    {
+      std::optional<int> opt{10};
+      auto abekobe = harmony::invert(opt) | [](std::nullopt_t) { ut::expect(true); };
+      
+      ut::expect(not harmony::validate(abekobe));
+      ut::expect(harmony::unwrap_other(abekobe) == 10);
+    }
+
+    {
+      std::error_code ec{};
+
+      auto abekobe1 = harmony::invert(ec) | [](std::error_code& ec_a) { ut::expect(not ec_a); };
+
+      ut::expect(harmony::validate(abekobe1));
+      ut::expect(harmony::unwrap_other(abekobe1) == 0);
+
+      int ec_int = static_cast<int>(std::errc::bad_address);
+      ec.assign(ec_int, std::system_category());
+
+      auto abekobe2 = harmony::invert(ec) | [](std::error_code&) { ut::expect(false); };
+
+      ut::expect(not harmony::validate(abekobe2));
+      ut::expect(harmony::unwrap_other(abekobe2) == ec_int);
+    }
+
   };
 }
