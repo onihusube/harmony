@@ -631,6 +631,15 @@ namespace harmony {
     }
 
     /**
+    * @brief 手動で型をはめて構築するときのin-placeコンストラクタ
+    */
+    template<typename... Args>
+      requires std::constructible_from<T, Args...>
+    constexpr monas(std::in_place_t, Args&&... args) noexcept(std::is_nothrow_constructible_v<T, Args...>)
+      : m_monad(std::forward<Args>(args)...)
+    {}
+
+    /**
     * @brief 保持するモナド的オブジェクトの有効値を取得
     */
     [[nodiscard]]
@@ -1049,9 +1058,9 @@ namespace harmony::detail {
       using L = std::remove_cvref_t<traits::unwrap_other_t<M>>;
       
       if (cpo::validate(m)) {
-        return monas(sachet<L, R>{ .value = std::variant<L, R>(std::in_place_index<1>, self.fmap(cpo::unwrap(std::forward<M>(m)))) });
+        return monas<sachet<L, R>>(std::in_place, std::variant<L, R>(std::in_place_index<1>, self.fmap(cpo::unwrap(std::forward<M>(m)))));
       } else {
-        return monas(sachet<L, R>{ .value = std::variant<L, R>(std::in_place_index<0>, cpo::unwrap_other(std::forward<M>(m))) });
+        return monas<sachet<L, R>>(std::in_place, std::variant<L, R>(std::in_place_index<0>, cpo::unwrap_other(std::forward<M>(m))));
       }
     }
   };
@@ -1137,9 +1146,9 @@ namespace harmony::detail {
       using L = std::remove_cvref_t<std::invoke_result_t<F, traits::unwrap_other_t<M>>>;
       
       if (cpo::validate(m)) {
-        return monas(sachet<L, R>{ .value = std::variant<L, R>(std::in_place_index<1>, cpo::unwrap(std::forward<M>(m))) });
+        return monas<sachet<L, R>>(std::in_place, std::variant<L, R>(std::in_place_index<1>, cpo::unwrap(std::forward<M>(m))));
       } else {
-        return monas(sachet<L, R>{ .value = std::variant<L, R>(std::in_place_index<0>, self.fmap(cpo::unwrap_other(std::forward<M>(m)))) });
+        return monas<sachet<L, R>>(std::in_place, std::variant<L, R>(std::in_place_index<0>, self.fmap(cpo::unwrap_other(std::forward<M>(m)))));
       }
     }
 
@@ -1410,9 +1419,9 @@ namespace harmony::inline monadic_op {
     using return_t = monas<either_t>;
 
     try {
-      return return_t(either_t{ .value = std::variant<std::exception_ptr, R>(std::in_place_index<1>, std::invoke(std::forward<F>(f), std::forward<Args>(args)...)) });
+      return return_t(std::in_place, std::variant<std::exception_ptr, R>(std::in_place_index<1>, std::invoke(std::forward<F>(f), std::forward<Args>(args)...)));
     } catch(...) {
-      return return_t(either_t{ .value = std::variant<std::exception_ptr, R>(std::in_place_index<0>, std::current_exception()) });
+      return return_t(std::in_place, std::variant<std::exception_ptr, R>(std::in_place_index<0>, std::current_exception()));
     }
   };
 
@@ -1606,9 +1615,8 @@ namespace harmony {
   template<maybe T>
   abekobe(T&&) -> abekobe<std::remove_cv_t<T>>;
 
-
-  inline constexpr auto invert = []<maybe M>(M&& m) {
-    return monas(abekobe{ .bound = std::forward<M>(m) });
+  inline constexpr auto invert = []<maybe M>(M &&m) {
+    return monas<abekobe<M>>(std::in_place, std::forward<M>(m));
   };
 }
 

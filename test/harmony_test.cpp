@@ -985,7 +985,7 @@ int main() {
     }
   };
 
-  "inert"_test = [] {
+  "invert"_test = [] {
     {
       std::optional<int> opt{10};
       auto abekobe = harmony::invert(opt) | [](std::nullopt_t) { ut::expect(true); };
