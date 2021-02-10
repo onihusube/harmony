@@ -1012,4 +1012,65 @@ int main() {
     }
 
   };
+
+  "to_either"_test = []{
+    using namespace harmony::monadic_op;
+
+    {
+      bool any_res = true;
+
+      auto ret = harmony::to_either(any_res, false) 
+        | [](bool b) { ut::expect(b); }
+        | fold_to<bool>;
+      
+      ut::expect(ret);
+
+      any_res = false;
+
+      auto ret2 = harmony::to_either(any_res, false) 
+        | [](bool) { ut::expect(false); }
+        | fold_to<bool>;
+
+      ut::expect(not ret2);
+    }
+
+    {
+      float vf = 1.0f;
+      constexpr float nan = std::numeric_limits<float>::quiet_NaN();
+
+      auto ret = harmony::to_either(vf, [](float f) { return std::isnan(f);}) 
+        | [](float f) { ut::expect(f == 1.0f); }
+        | fold_to<float>;
+
+      ut::expect(ret = 1.0f);
+
+      vf = nan;
+
+      float ret2 = harmony::to_either(vf, [](float f) { return std::isnan(f);}) 
+        | [](float) { ut::expect(false); }
+        | fold_to<float>;
+
+      ut::expect(std::isnan(ret2));
+    }
+
+    {
+      std::int32_t n = 10;
+
+      auto ret = harmony::to_either(n, [](std::int32_t m) { return m < 0;}) 
+        | [](int m) { ut::expect(m == 10); }
+        | [](int m) { return ++m; }
+        | fold_to<std::int32_t>;
+
+      ut::expect(ret == 11);
+
+      n = -1;
+
+      auto ret2 = harmony::to_either(n, [](std::int32_t m) { return m < 0;}) 
+        | [](int) { ut::expect(false); }
+        | [](int m) { return ++m; }
+        | fold_to<std::int32_t>;
+
+      ut::expect(ret2 == -1);
+    }
+  };
 }

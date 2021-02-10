@@ -1615,10 +1615,67 @@ namespace harmony {
   template<maybe T>
   abekobe(T&&) -> abekobe<std::remove_cv_t<T>>;
 
+  /**
+  * @brief 有効値と無効値を反転させる
+  * @return abekobe<M>をmonasでラップしたオブジェクト
+  */
   inline constexpr auto invert = []<maybe M>(M &&m) {
     return monas<abekobe<M>>(std::in_place, std::forward<M>(m));
   };
 }
+
+namespace harmony {
+  namespace detail {
+
+    struct to_either_impl {
+
+      /**
+      * @brief maybeでないような型のオブジェクトをeitherとして扱えるようにする
+      * @param value 変換する値
+      * @param check_invalid 無効値を判定する述語オブジェクト
+      * @return valueが無効値なら無効状態、そうでないなら有効状態を保持したeitherなオブジェクトをmonasでラップしたものを返す
+      */
+      template<typename T, std::predicate<T> P>
+        requires (not maybe<T>)
+      [[nodiscard]]
+      constexpr specialization_of<monas> auto operator()(T&& value, P&& check_invalid) const {
+        using RC = std::remove_cvref_t<T>;
+        using either_t = sachet<RC, RC>;
+        using return_t = monas<either_t>;
+
+        if (not check_invalid(value)) {
+          // 有効値として構築
+          return return_t(std::in_place, std::variant<RC, RC>(std::in_place_index<1>, std::forward<T>(value)));
+        } else {
+          // 無効値として構築
+          return return_t(std::in_place, std::variant<RC, RC>(std::in_place_index<0>, std::forward<T>(value)));
+        }
+      }
+
+      /**
+      * @brief maybeでないような型のオブジェクトをeitherとして扱えるようにする
+      * @param value 変換する値
+      * @param invalid 無効値として扱うTの値
+      * @return valueが無効値なら無効状態、そうでないなら有効状態を保持したeitherなオブジェクトをmonasでラップしたものを返す
+      */
+      template<typename T, std::equality_comparable_with<T> U = T>
+        requires (not maybe<T>)
+      [[nodiscard]]
+      constexpr specialization_of<monas> auto operator()(T&& value, U&& invalid) const {
+        return (*this)(std::forward<T>(value), [invalid_value = std::forward<U>(invalid)](const auto& comp_value) -> bool {
+          return invalid_value == comp_value; // 値が無効値である場合にtrueを返す
+        });
+      }
+    };
+  } // namespace detail
+
+  /**
+  * @brief maybeでないような型のオブジェクトをeitherとして扱えるようにする
+  * @details 返されるオブジェクトには渡されたvalueを完全転送する（適切にコピー/ムーブし、参照のままにしない）
+  */
+  inline constexpr detail::to_either_impl to_either{};
+
+} // namespace harmony
 
 #ifdef _MSC_VER
 #pragma warning( pop )
