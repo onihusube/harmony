@@ -8,6 +8,7 @@
 #include <optional>
 #include <functional>
 #include <any>
+#include <cmath>
 
 #ifdef _MSC_VER
 #pragma warning( push )
@@ -1627,7 +1628,7 @@ namespace harmony {
 namespace harmony {
   namespace detail {
 
-    struct to_either_impl {
+    struct harmonize_impl {
 
       /**
       * @brief maybeでないような型のオブジェクトをeitherとして扱えるようにする
@@ -1636,7 +1637,7 @@ namespace harmony {
       * @return valueが無効値なら無効状態、そうでないなら有効状態を保持したeitherなオブジェクトをmonasでラップしたものを返す
       */
       template<typename T, std::predicate<T> P>
-        requires (not maybe<T>)
+        requires (not either<T>)
       [[nodiscard]]
       constexpr specialization_of<monas> auto operator()(T&& value, P&& check_invalid) const {
         using RC = std::remove_cvref_t<T>;
@@ -1659,13 +1660,35 @@ namespace harmony {
       * @return valueが無効値なら無効状態、そうでないなら有効状態を保持したeitherなオブジェクトをmonasでラップしたものを返す
       */
       template<typename T, std::equality_comparable_with<T> U = T>
-        requires (not maybe<T>)
+        requires (not either<T>)
       [[nodiscard]]
       constexpr specialization_of<monas> auto operator()(T&& value, U&& invalid) const {
         return (*this)(std::forward<T>(value), [invalid_value = std::forward<U>(invalid)](const auto& comp_value) -> bool {
           return invalid_value == comp_value; // 値が無効値である場合にtrueを返す
         });
       }
+
+      /**
+      * @brief boolをeitherとして扱えるようにする
+      * @param value 変換するbool値
+      * @return either<bool, bool>、valueがfalseなら無効状態、trueなら有効状態となるeitherなオブジェクトをmonasでラップしたものを返す
+      */
+      [[nodiscard]]
+      constexpr specialization_of<monas> auto operator()(bool value) const {
+        return (*this)(value, false);
+      }
+
+      /**
+      * @brief 浮動小数点数型をeitherとして扱えるようにする
+      * @param value 変換する浮動小数値
+      * @return either<FP, FP>、valueがNaNなら無効状態、そうでないなら有効状態となるeitherなオブジェクトをmonasでラップしたものを返す
+      */
+      template<std::floating_point FP>
+      [[nodiscard]]
+      constexpr specialization_of<monas> auto operator()(FP value) const {
+        return (*this)(value, [](FP f) { return std::isnan(f); });
+      }
+
     };
   } // namespace detail
 
@@ -1673,7 +1696,9 @@ namespace harmony {
   * @brief maybeでないような型のオブジェクトをeitherとして扱えるようにする
   * @details 返されるオブジェクトには渡されたvalueを完全転送する（適切にコピー/ムーブし、参照のままにしない）
   */
-  inline constexpr detail::to_either_impl to_either{};
+  inline constexpr detail::harmonize_impl harmonize{};
+
+  inline constexpr auto& to_either = harmonize;
 
 } // namespace harmony
 
