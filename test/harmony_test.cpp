@@ -620,7 +620,7 @@ int main() {
         | map([](double d) { return std::to_string(d);});
 
       ut::expect(harmony::validate(r));
-      "22.0"sv == harmony::unwrap(r);
+      ut::expect(harmony::unwrap(r) == "22.000000"sv);
     }
   };
 
