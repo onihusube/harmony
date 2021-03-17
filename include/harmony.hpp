@@ -536,16 +536,31 @@ namespace harmony::traits {
 
 namespace harmony::inline concepts {
 
+  /**
+  * @brief maybeが指定した型の物であるかを調べる
+  * @details 完全に同一を求めると使いづらい（optionalなど、値カテゴリで細かく変化する）ので、変換可能であるかをチェックしている
+  */
   template<typename M, typename R>
   concept maybe_of =
     maybe<M> and
     concepts::without_narrowing_convertible<traits::unwrap_t<M>, R>;
 
+  /**
+  * @brief eitherが指定した型の物であるかを調べる
+  * @brief L = Either<L, R>の左側の型、R = Either<L, R>の右側の型。Result<T, E>とは順番が逆になる
+  * @details 完全に同一を求めると使いづらい（optionalなど、値カテゴリで細かく変化する）ので、変換可能であるかをチェックしている
+  */
   template<typename M, typename L, typename R>
   concept either_of =
     maybe_of<M, R> and
     either<M> and
-    concepts::without_narrowing_convertible<traits::unwrap_other_t<M>, L>; 
+    concepts::without_narrowing_convertible<traits::unwrap_other_t<M>, L>;
+
+  /**
+  * @brief Result<T, E> likeな型が指定した型の物であるかを調べる、利便性のため
+  */
+  template<typename M, typename L, typename R>
+  concept result_of = either_of<M, R, L>;
 }
 
 namespace harmony {
