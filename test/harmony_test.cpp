@@ -143,6 +143,32 @@ int main() {
     ut::expect(not harmony::either<std::error_code>);
   };
 
+  "concept maybe_of"_test = [] {
+    ut::expect(harmony::maybe_of<int*, int&>);
+    ut::expect(harmony::maybe_of<std::optional<int>, int&&>);
+    ut::expect(harmony::maybe_of<std::vector<int>, std::ranges::views::all_t<std::vector<int>&>>);
+    ut::expect(harmony::maybe_of<std::unique_ptr<int>, int&>);
+    ut::expect(harmony::maybe_of<std::shared_ptr<int>, int&>);
+    ut::expect(harmony::maybe_of<std::variant<int, double>, double&&>);
+    ut::expect(harmony::maybe_of<simple_result<int, std::string>, int&>);
+    ut::expect(harmony::maybe_of<tl::expected<int, std::string>, int&&>);
+    ut::expect(harmony::maybe_of<std::future<int>, std::variant<std::exception_ptr, int>>);
+    ut::expect(harmony::maybe_of<std::future<int &>, std::variant<std::exception_ptr, std::reference_wrapper<int>>>);
+    ut::expect(harmony::maybe_of<std::shared_future<int>, std::variant<std::exception_ptr, std::reference_wrapper<const int>>>);
+    ut::expect(harmony::maybe_of<std::shared_future<int &>, std::variant<std::exception_ptr, std::reference_wrapper<int>>>);
+    ut::expect(harmony::maybe_of<std::error_code, int>);
+  };
+
+  "concept either_of"_test = [] {
+    ut::expect(harmony::either_of<int *, std::nullptr_t, int &>);
+    ut::expect(harmony::either_of<std::optional<int>, std::nullopt_t, int&&>);
+    ut::expect(harmony::either_of<std::unique_ptr<int>, std::nullptr_t, int &>);
+    ut::expect(harmony::either_of<std::shared_ptr<int>, std::nullptr_t, int &>);
+    ut::expect(harmony::either_of<std::variant<int, double>, int&&, double&&>);
+    ut::expect(harmony::either_of<simple_result<int, std::string>, std::string&, int&>);
+    ut::expect(harmony::either_of<tl::expected<int, std::string>, std::string&&, int&&>);
+  };
+
   "cpo unwrap test"_test = [] {
     {
       int n = 10;

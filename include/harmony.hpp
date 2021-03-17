@@ -46,13 +46,15 @@ namespace harmony::inline concepts {
 
   /**
   * @brief 縮小変換を起こさずにFrom -> Toへ変換可能
+  * @details Toが参照型の場合、検出部の制約式が動かない。暫定的にsame_asで対処しているが要検討・・・
   */
   template<typename From, typename To>
   concept without_narrowing_convertible =
     std::convertible_to<From, To> and
-    requires (From&& x) {
-      { std::type_identity_t<To[]>{std::forward<From>(x)} } -> std::same_as<To[1]>;
-    };
+    ( requires (From&& x) {
+          { std::type_identity_t<To[]>{std::forward<From>(x)} } -> std::same_as<To[1]>;
+      } or
+      std::same_as<From, To>);
 
   namespace variant_like_detail {
     template <typename V>
@@ -530,6 +532,20 @@ namespace harmony::traits {
   */
   template<typename T>
   using unwrap_other_t = decltype(harmony::cpo::unwrap_other(std::declval<T>()));
+}
+
+namespace harmony::inline concepts {
+
+  template<typename M, typename R>
+  concept maybe_of =
+    maybe<M> and
+    concepts::without_narrowing_convertible<traits::unwrap_t<M>, R>;
+
+  template<typename M, typename L, typename R>
+  concept either_of =
+    maybe_of<M, R> and
+    either<M> and
+    concepts::without_narrowing_convertible<traits::unwrap_other_t<M>, L>; 
 }
 
 namespace harmony {
