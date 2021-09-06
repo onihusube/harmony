@@ -1,4 +1,5 @@
-![Test by GCC latest](https://github.com/onihusube/harmony/workflows/Test%20by%20GCC%20latest/badge.svg)
+[![Test by GCC latest](https://github.com/onihusube/harmony/actions/workflows/gcc.yml/badge.svg)](https://github.com/onihusube/harmony/actions/workflows/gcc.yml)
+[![Test by MSVC](https://github.com/onihusube/harmony/actions/workflows/msvc.yml/badge.svg)](https://github.com/onihusube/harmony/actions/workflows/msvc.yml)
 
 # harmony
 
