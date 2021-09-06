@@ -20,6 +20,6 @@ jobs:
         with:
           python-version: '3.x'
       - run: pip install meson ninja
-      - uses: ilammy/msvc-dev-cmd@v1.3.0
+      - uses: ilammy/msvc-dev-cmd@v1.9.0
       - run: meson setup build
       - run: meson test -C build -v
