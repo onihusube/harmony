@@ -1,0 +1,12 @@
+name: Test by MSVC
+on: [push, pull_request]
+
+jobs:
+  MSVC:
+    runs-on: windows-latest
+    steps:
+      - uses: actions/checkout@v1
+      - run: pip install meson ninja
+      - uses: ilammy/msvc-dev-cmd@v1.9.0
+      - run: meson setup build
+      - run: meson test -C build -v
