@@ -16,6 +16,7 @@
 #endif // _MSC_VER
 
 #define BOOST_UT_DISABLE_MODULE
+
 #include "boost/ut.hpp"
 
 #ifdef _MSC_VER
