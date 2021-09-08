@@ -1557,15 +1557,13 @@ namespace harmony::detail {
   value_or_impl(U&&) -> value_or_impl<std::remove_cvref_t<U>>;
 
 
-  template<typename ArgsTuple>
+  template<typename... Args>
   struct value_or_construct_impl {
-    // コピーorムーブして保持
-    ArgsTuple tmp_hold;
+    // チェーンの中でのみ使用されることを想定しているので、ダングリング参照にはならないものとする
+    std::tuple<Args&&...> tmp_hold;
 
     template<maybe M>
-      requires requires(ArgsTuple tuple) {
-        std::make_from_tuple<std::remove_cvref_t<traits::unwrap_t<M>>>(std::move(tuple));
-      }
+      requires std::constructible_from<std::remove_cvref_t<traits::unwrap_t<M>>, Args&&...>
     [[nodiscard]]
     friend constexpr auto operator|(monas<M>&& m, value_or_construct_impl&& self) -> std::remove_cvref_t<traits::unwrap_t<M>> {
       using R = std::remove_cvref_t<traits::unwrap_t<M>>;
@@ -1577,9 +1575,6 @@ namespace harmony::detail {
       }
     }
   };
-
-  template<typename T>
-  value_or_construct_impl(T&&) -> value_or_construct_impl<T>;
 
 } // namespace detail
 
@@ -1596,7 +1591,7 @@ namespace harmony::inline monadic_op {
   * @brief 有効値を保持していなければ指定された値から構築して返す
   */
   inline constexpr auto value_or_construct = []<typename... Args>(Args&&... args) {
-    return detail::value_or_construct_impl{ .tmp_hold = std::forward_as_tuple(std::forward<Args>(args)...) };
+    return detail::value_or_construct_impl<Args...>{ .tmp_hold = std::forward_as_tuple(std::forward<Args>(args)...) };
   };
 
 } // namespace harmony::inline monadic_op
