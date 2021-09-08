@@ -76,6 +76,9 @@
         "cinttypes": "cpp",
         "condition_variable": "cpp",
         "future": "cpp",
-        "stop_token": "cpp"
+        "stop_token": "cpp",
+        "source_location": "cpp",
+        "numbers": "cpp",
+        "semaphore": "cpp"
     }
 }

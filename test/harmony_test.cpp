@@ -9,6 +9,7 @@
 #include <array>
 #include <future>
 #include <system_error>
+#include <numbers>
 
 #ifdef _MSC_VER
 #pragma warning( push )
@@ -1010,6 +1011,96 @@ int main() {
                     | fold_to<std::string>;
 
       ut::expect(str == "std::future_error"sv);
+    }
+  };
+
+  "value_or"_test = [] {
+    {
+      std::optional<int> opt{10};
+
+      std::integral auto n = harmony::monas(opt) | harmony::value_or(100);
+
+      ut::expect(n == 10_i);
+    }
+    {
+      std::optional<int> opt{};
+
+      std::integral auto n = harmony::monas(opt) | harmony::value_or(100);
+
+      ut::expect(n == 100_i);
+    }
+    {
+      tl::expected<double, int> exp{3.14};
+
+      std::floating_point auto d = harmony::monas(exp) | harmony::value_or(std::numbers::phi);
+      ut::expect(d == 3.14);
+    }
+    {
+      tl::expected<double, int> exp{tl::unexpect, 2};
+
+      std::floating_point auto d = harmony::monas(exp) | harmony::value_or(std::numbers::phi);
+      ut::expect(d == std::numbers::phi);
+    }
+    {
+      double v = 3.14;
+      double *p = &v;
+
+      std::floating_point auto d = harmony::monas(p) | harmony::value_or(std::numbers::phi);
+      ut::expect(d == 3.14_d);
+    }
+    {
+      double* p = nullptr;
+
+      std::floating_point auto d = harmony::monas(p) | harmony::value_or(std::numbers::phi);
+      ut::expect(d == std::numbers::phi);
+    }
+  };
+
+  "value_or_construct"_test = [] {
+    {
+      tl::expected<double, int> exp{3.14};
+
+      std::floating_point auto d = harmony::monas(exp) | harmony::value_or_construct(std::numbers::phi);
+      ut::expect(d == 3.14_d);
+    }
+    {
+      tl::expected<double, int> exp{tl::unexpect, 2};
+
+      std::floating_point auto d = harmony::monas(exp) | harmony::value_or_construct(std::numbers::phi);
+      ut::expect(d == std::numbers::phi);
+    }
+
+    struct C {
+      int n;
+      double d;
+
+      C() : n(1), d{1.0} {}
+
+      C(int a, int b, int c) : n(a+b+c), d{} {}
+
+      C(int a, double b) : n{a}, d{b} {}
+    };
+
+    {
+      std::optional<C> opt{C{}};
+
+      std::same_as<C> auto c = harmony::monas(opt) | harmony::value_or_construct(0, 1, 2);
+      ut::expect(c.n == 1_i);
+      ut::expect(c.d == 1.0_d);
+    }
+    {
+      std::optional<C> opt{};
+
+      std::same_as<C> auto c = harmony::monas(opt) | harmony::value_or_construct(0, 1, 2);
+      ut::expect(c.n == 3_i);
+      ut::expect(c.d == 0.0_d);
+    }
+    {
+      std::optional<C> opt{};
+
+      std::same_as<C> auto c = harmony::monas(opt) | harmony::value_or_construct(3, 3.14);
+      ut::expect(c.n == 3_i);
+      ut::expect(c.d == 3.14_d);
     }
   };
 

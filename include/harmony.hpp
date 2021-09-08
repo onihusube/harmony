@@ -1528,32 +1528,58 @@ namespace harmony::detail {
 
   template<typename U>
   struct value_or_impl {
+    // コピーorムーブして保持
     U tmp_hold;
 
-    template<unwrappable M>
-      requires std::convertible_to<U, traits::unwrap_t<M>> and
+    template<maybe M>
+      requires std::convertible_to<U, std::remove_cvref_t<traits::unwrap_t<M>>> and
                detail::value_or_reusable<U, M>
     [[nodiscard]]
     friend constexpr auto operator|(monas<M>&& m, value_or_impl&& self) noexcept(noexcept(std::move(m).value_or(std::forward<U>(self.tmp_hold)))) {
-      return std::move(m).value_or(std::forward<U>(self.tmp_hold));
+      return std::move(m).value_or(std::move(self.tmp_hold));
     }
 
-    template<unwrappable M>
-      requires std::convertible_to<U, traits::unwrap_t<M>>
+    template<maybe M>
+      requires std::convertible_to<U, std::remove_cvref_t<traits::unwrap_t<M>>>
     [[nodiscard]]
-    friend constexpr auto operator|(monas<M>&& m, value_or_impl&& self) noexcept(noexcept(cpo::validate(m)) and noexcept(cpo::unwrap(m)) and std::is_nothrow_convertible_v<U, traits::unwrap_t<M>>) {
-      using R = traits::unwrap_t<M>;
+    friend constexpr auto operator|(monas<M>&& m, value_or_impl&& self) noexcept(noexcept(cpo::validate(m)) and noexcept(cpo::unwrap(m)) and std::is_nothrow_constructible_v<std::remove_cvref_t<traits::unwrap_t<M>>, U>) {
+      using R = std::remove_cvref_t<traits::unwrap_t<M>>;
 
       if (cpo::validate(m)) {
         return cpo::unwrap(std::move(m));
       } else {
-        return R(std::forward<U>(self.tmp_hold));
+        return R(std::move(self.tmp_hold));
       }
     }
   };
 
   template<typename U>
-  value_or_impl(U&&) -> value_or_impl<U>;
+  value_or_impl(U&&) -> value_or_impl<std::remove_cvref_t<U>>;
+
+
+  template<typename ArgsTuple>
+  struct value_or_construct_impl {
+    // コピーorムーブして保持
+    ArgsTuple tmp_hold;
+
+    template<maybe M>
+      requires requires(ArgsTuple tuple) {
+        std::make_from_tuple<std::remove_cvref_t<traits::unwrap_t<M>>>(std::move(tuple));
+      }
+    [[nodiscard]]
+    friend constexpr auto operator|(monas<M>&& m, value_or_construct_impl&& self) -> std::remove_cvref_t<traits::unwrap_t<M>> {
+      using R = std::remove_cvref_t<traits::unwrap_t<M>>;
+
+      if (cpo::validate(m)) {
+        return cpo::unwrap(std::move(m));
+      } else {
+        return std::make_from_tuple<R>(std::move(self.tmp_hold));
+      }
+    }
+  };
+
+  template<typename T>
+  value_or_construct_impl(T&&) -> value_or_construct_impl<T>;
 
 } // namespace detail
 
@@ -1564,6 +1590,13 @@ namespace harmony::inline monadic_op {
   */
   inline constexpr auto value_or = []<typename T>(T&& v) {
     return detail::value_or_impl{ .tmp_hold = std::forward<T>(v) };
+  };
+
+  /**
+  * @brief 有効値を保持していなければ指定された値から構築して返す
+  */
+  inline constexpr auto value_or_construct = []<typename... Args>(Args&&... args) {
+    return detail::value_or_construct_impl{ .tmp_hold = std::forward_as_tuple(std::forward<Args>(args)...) };
   };
 
 } // namespace harmony::inline monadic_op
