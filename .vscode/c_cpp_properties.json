@@ -9,7 +9,7 @@
             ],
             "defines": [],
             "macFrameworkPath": [],
-            "compilerPath": "/usr/local/bin/g++-10",
+            "compilerPath": "/usr/local/bin/g++-11",
             "cStandard": "c11",
             "cppStandard": "c++20",
             "intelliSenseMode": "gcc-x64",

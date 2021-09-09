@@ -1104,6 +1104,35 @@ int main() {
     }
   };
 
+  "value_or_else"_test = [] {
+    {
+      std::optional<int> opt{10};
+
+      std::integral auto n = harmony::monas(opt) | harmony::value_or_else([]{ return 100; });
+
+      ut::expect(n == 10_i);
+    }
+    {
+      std::optional<int> opt{};
+
+      std::integral auto n = harmony::monas(opt) | harmony::value_or_else([]{ return 100; });
+
+      ut::expect(n == 100_i);
+    }
+    {
+      tl::expected<double, int> exp{3.14};
+
+      std::floating_point auto d = harmony::monas(exp) | harmony::value_or_else( []{ return std::numbers::phi; });
+      ut::expect(d == 3.14_d);
+    }
+    {
+      tl::expected<double, int> exp{tl::unexpect, 2};
+
+      std::floating_point auto d = harmony::monas(exp) | harmony::value_or_else( []{ return std::numbers::phi; });
+      ut::expect(d == std::numbers::phi);
+    }
+  };
+
   "invert"_test = [] {
     {
       std::optional<int> opt{10};

@@ -1565,7 +1565,7 @@ namespace harmony::detail {
     template<maybe M>
       requires std::constructible_from<std::remove_cvref_t<traits::unwrap_t<M>>, Args&&...>
     [[nodiscard]]
-    friend constexpr auto operator|(monas<M>&& m, value_or_construct_impl&& self) -> std::remove_cvref_t<traits::unwrap_t<M>> {
+    friend constexpr auto operator|(monas<M>&& m, value_or_construct_impl&& self) noexcept(noexcept(cpo::validate(m)) and noexcept(cpo::unwrap(std::move(m))) and std::is_nothrow_constructible_v<std::remove_cvref_t<traits::unwrap_t<M>>, Args&&...>) -> std::remove_cvref_t<traits::unwrap_t<M>> {
       using R = std::remove_cvref_t<traits::unwrap_t<M>>;
 
       if (cpo::validate(m)) {
@@ -1575,6 +1575,26 @@ namespace harmony::detail {
       }
     }
   };
+
+
+  template<std::invocable F>
+  struct value_or_else_impl {
+    F tmp_f;
+
+    template<maybe M>
+      requires std::convertible_to<std::remove_cvref_t<traits::unwrap_t<M>>, std::invoke_result_t<F>>
+    [[nodiscard]]
+    friend constexpr auto operator|(monas<M>&& m, value_or_else_impl&& self) noexcept(noexcept(cpo::validate(m)) and noexcept(cpo::unwrap(std::move(m))) and std::is_nothrow_invocable_r_v<std::remove_cvref_t<traits::unwrap_t<M>>, std::invoke_result_t<F>>) -> std::remove_cvref_t<traits::unwrap_t<M>> {
+      if (cpo::validate(m)) {
+        return cpo::unwrap(std::move(m));
+      } else {
+        return std::move(self.tmp_f)();
+      }
+    }
+  };
+
+  template<typename F>
+  value_or_else_impl(F&&) -> value_or_else_impl<F>;
 
 } // namespace detail
 
@@ -1592,6 +1612,13 @@ namespace harmony::inline monadic_op {
   */
   inline constexpr auto value_or_construct = []<typename... Args>(Args&&... args) {
     return detail::value_or_construct_impl<Args...>{ .tmp_hold = std::forward_as_tuple(std::forward<Args>(args)...) };
+  };
+
+  /**
+  * @brief 有効値を保持していなければ指定されたCallableの戻り値を返す
+  */
+  inline constexpr auto value_or_else = []<typename F>(F&& f) {
+    return detail::value_or_else_impl{ .tmp_f = std::forward<F>(f) };
   };
 
 } // namespace harmony::inline monadic_op
