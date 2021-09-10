@@ -1262,4 +1262,25 @@ int main() {
       ut::expect(ret2 == -1);
     }
   };
+
+  "inspect"_test = [] {
+    {
+      std::optional<int> opt{10};
+
+      harmony::monas(opt) | harmony::inspect([](const int& n) { ut::expect( n == 10_i); });
+
+      opt = std::nullopt;
+
+      harmony::monas(opt) | harmony::inspect([](int) { ut::expect(false); });
+    }
+    {
+      tl::expected<double, int> exp{3.14};
+
+      harmony::monas(exp) | harmony::inspect([](const double& n) { ut::expect( n == 3.14_d); });
+
+      exp = tl::unexpected<int>(-1);
+
+      harmony::monas(exp) | harmony::inspect([](double) { ut::expect(false); });
+    }
+  };
 }

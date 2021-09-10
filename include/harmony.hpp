@@ -1788,6 +1788,56 @@ namespace harmony {
 
 } // namespace harmony
 
+
+namespace harmony {
+  namespace detail {
+
+    template<typename T>
+    constexpr auto lvalue_as_const(T& t) -> std::add_const_t<T>& {
+      return std::as_const(t);
+    }
+
+    template<typename T>
+    constexpr auto lvalue_as_const(T&& t) -> T&& {
+      return std::forward<T>(t);
+    }
+
+    template<typename T>
+    using lvalue_as_const_t = decltype(lvalue_as_const(std::declval<T>()));
+
+    template<typename F>
+    struct inspect_impl {
+      F ins_f;
+
+      template<unwrappable M>
+        requires std::invocable<F, lvalue_as_const_t<traits::unwrap_t<M>>> and
+                 std::same_as<std::invoke_result_t<F, lvalue_as_const_t<traits::unwrap_t<M>>>, void>
+      friend constexpr auto operator|(monas<M>&& m, inspect_impl&& self) -> monas<M>&& {
+        std::invoke(std::move(self.ins_f), lvalue_as_const(cpo::unwrap(m)));
+        return std::move(m);
+      }
+
+      template<maybe M>
+        requires std::invocable<F, lvalue_as_const_t<traits::unwrap_t<M>>> and
+                 std::same_as<std::invoke_result_t<F, lvalue_as_const_t<traits::unwrap_t<M>>>, void>
+      friend constexpr auto operator|(monas<M>&& m, inspect_impl&& self) -> monas<M>&& {
+        if (cpo::validate(m)) {
+          std::invoke(std::move(self.ins_f), lvalue_as_const(cpo::unwrap(m)));
+        }
+        return std::move(m);
+      }
+    };
+
+    template<typename F>
+    inspect_impl(F&&) -> inspect_impl<F>;
+  }
+
+  inline constexpr auto inspect = []<typename F>(F&& f) {
+    return detail::inspect_impl{ .ins_f = std::forward<F>(f)};
+  };
+}
+
+
 #ifdef _MSC_VER
 #pragma warning( pop )
 #endif // _MSC_VER
