@@ -1283,4 +1283,25 @@ int main() {
       harmony::monas(exp) | harmony::inspect([](double) { ut::expect(false); });
     }
   };
+
+  "inspect_err"_test = [] {
+    {
+      std::optional<int> opt{10};
+
+      harmony::monas(opt) | harmony::inspect_err([](std::nullopt_t) { ut::expect(false); });
+
+      opt = std::nullopt;
+
+      harmony::monas(opt) | harmony::inspect_err([](std::nullopt_t) { ut::expect(true); });
+    }
+    {
+      tl::expected<double, int> exp{3.14};
+
+      harmony::monas(exp) | harmony::inspect_err([](const int&) { ut::expect(false); });
+
+      exp = tl::unexpected<int>(-1);
+
+      harmony::monas(exp) | harmony::inspect_err([](const int n) { ut::expect(n == -1_i); });
+    }
+  };
 }

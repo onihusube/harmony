@@ -1830,10 +1830,33 @@ namespace harmony {
 
     template<typename F>
     inspect_impl(F&&) -> inspect_impl<F>;
+
+
+    template<typename F>
+    struct inspect_err_impl {
+      F ins_f;
+
+      template<maybe M>
+        requires std::invocable<F, lvalue_as_const_t<traits::unwrap_other_t<M>>> and
+                 std::same_as<std::invoke_result_t<F, lvalue_as_const_t<traits::unwrap_other_t<M>>>, void>
+      friend constexpr auto operator|(monas<M>&& m, inspect_err_impl&& self) -> monas<M>&& {
+        if (not cpo::validate(m)) {
+          std::invoke(std::move(self.ins_f), lvalue_as_const(cpo::unwrap_other(m)));
+        }
+        return std::move(m);
+      }
+    };
+
+    template<typename F>
+    inspect_err_impl(F&&) -> inspect_err_impl<F>;
   }
 
   inline constexpr auto inspect = []<typename F>(F&& f) {
-    return detail::inspect_impl{ .ins_f = std::forward<F>(f)};
+    return detail::inspect_impl{ .ins_f = std::forward<F>(f) };
+  };
+
+  inline constexpr auto inspect_err = []<typename F>(F&& f) {
+    return detail::inspect_err_impl{ .ins_f = std::forward<F>(f) };
   };
 }
 
